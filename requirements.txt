@@ -1,0 +1,3 @@
+# ComfyMate Requirements
+# ComfyUI environment provides aiohttp and standard libraries by default.
+aiohttp>=3.9.0

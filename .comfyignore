@@ -1,0 +1,14 @@
+# Comfy Registry package ignore list
+.git
+.github
+tests/
+docs/
+scratch/
+config*.json
+.env*
+*.env
+storage/
+*.pyc
+__pycache__/
+.DS_Store
+*.log

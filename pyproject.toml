@@ -1,0 +1,39 @@
+[project]
+name = "comfymate"
+description = "Context-aware intelligent AI copilot inside ComfyUI. Explains workflows, analyzes nodes, and diagnoses runtime errors."
+version = "1.0.0"
+readme = "README.md"
+license = { text = "MIT" }
+dependencies = [
+    "aiohttp>=3.9.0",
+]
+keywords = [
+    "comfyui",
+    "assistant",
+    "ai assistant",
+    "prompt assistant",
+    "copilot",
+    "llm",
+    "chat",
+    "workflow",
+    "debug",
+]
+
+[project.urls]
+Repository = "https://github.com/jjeejj/ComfyMate"
+Issues = "https://github.com/jjeejj/ComfyMate/issues"
+
+[tool.comfy]
+PublisherId = "comfymate"
+DisplayName = "ComfyMate"
+Icon = "https://raw.githubusercontent.com/jjeejj/ComfyMate/master/docs/assets/icon.png"
+includes = [
+    "__init__.py",
+    "py/**",
+    "web/**",
+    "requirements.txt",
+    "README.md",
+    "README_CN.md",
+    "LICENSE",
+    "config.example.json",
+]
