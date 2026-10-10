@@ -48,10 +48,10 @@ export class CanvasActionManager {
       const width = canvasEl?.width || window.innerWidth;
       const height = canvasEl?.height || window.innerHeight;
 
-      const nodeX = Array.isArray(node.pos) ? node.pos[0] : 0;
-      const nodeY = Array.isArray(node.pos) ? node.pos[1] : 0;
-      const nodeW = Array.isArray(node.size) ? node.size[0] : 140;
-      const nodeH = Array.isArray(node.size) ? node.size[1] : 80;
+      const nodeX = node.pos && typeof node.pos[0] === "number" ? node.pos[0] : 0;
+      const nodeY = node.pos && typeof node.pos[1] === "number" ? node.pos[1] : 0;
+      const nodeW = node.size && typeof node.size[0] === "number" ? node.size[0] : 140;
+      const nodeH = node.size && typeof node.size[1] === "number" ? node.size[1] : 80;
 
       const centerX = nodeX + nodeW / 2;
       const centerY = nodeY + nodeH / 2;
@@ -70,33 +70,169 @@ export class CanvasActionManager {
 
   /**
    * Flash a pulsing visual highlight on the node to draw the user's attention.
+   * Renders an electric-blue glowing animated outline around the ENTIRE node border for 3 complete breathing cycles.
    */
   flashNode(node) {
     const canvas = this.app?.canvas;
     if (!canvas || !node) return;
 
+    // Cancel any ongoing pulse animation on this node
+    if (typeof node.__cm_pulse_cancel === "function") {
+      try {
+        node.__cm_pulse_cancel();
+      } catch (_) {}
+    }
+
+    const origDrawForeground = node.onDrawForeground;
     const originalBoxcolor = node.boxcolor;
     const originalColor = node.color;
-    let count = 0;
 
-    const pulseInterval = setInterval(() => {
-      count++;
-      if (count % 2 === 1) {
-        node.boxcolor = "#3b82f6"; // ComfyMate electric blue
+    const pulseCycles = 3;
+    const cycleDuration = 450; // ms per pulse cycle (total ~1350ms)
+    const totalDuration = pulseCycles * cycleDuration;
+    const startTime = performance.now();
+
+    let animId = null;
+    let currentAlpha = 0;
+
+    const cleanup = () => {
+      if (animId !== null) {
+        cancelAnimationFrame(animId);
+        animId = null;
+      }
+      node.onDrawForeground = origDrawForeground;
+      node.boxcolor = originalBoxcolor;
+      node.color = originalColor;
+      node.__cm_pulse_cancel = null;
+      canvas.setDirty(true, true);
+    };
+
+    node.__cm_pulse_cancel = cleanup;
+
+    // Helper to draw clean rounded rectangle
+    const drawRoundedRect = (ctx, x, y, w, h, r) => {
+      ctx.beginPath();
+      if (typeof ctx.roundRect === "function") {
+        ctx.roundRect(x, y, w, h, [r]);
+      } else {
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.arcTo(x + w, y, x + w, y + r, r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+        ctx.lineTo(x + r, y + h);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+      }
+    };
+
+    // Chain onDrawForeground to render the glowing outer border around the ENTIRE node
+    node.onDrawForeground = function (ctx, c) {
+      if (typeof origDrawForeground === "function") {
+        try {
+          origDrawForeground.apply(this, arguments);
+        } catch (_) {}
+      }
+
+      if (currentAlpha > 0.01) {
+        ctx.save();
+        const scale = canvas.ds?.scale || 1;
+        const pad = Math.max(3, 4 / scale);
+
+        // Correctly handle Float32Array and regular Array for node dimensions
+        const isCollapsed = Boolean(node.flags?.collapsed);
+        const nodeW = node.size && typeof node.size[0] === "number" ? node.size[0] : 140;
+        const nodeH = node.size && typeof node.size[1] === "number" ? node.size[1] : 80;
+
+        let titleHeight = (window.LiteGraph && window.LiteGraph.NODE_TITLE_HEIGHT) || 30;
+        if (node.constructor && window.LiteGraph && node.constructor.title_mode === window.LiteGraph.NO_TITLE) {
+          titleHeight = 0;
+        }
+
+        // Determine local bounds: (0, 0) in onDrawForeground is at node.pos
+        // Title bar extends upwards from y = -titleHeight to y = 0
+        // Node body extends downwards from y = 0 to y = nodeH
+        let localX = 0;
+        let localY = titleHeight > 0 ? -titleHeight : 0;
+        let localW = isCollapsed ? (node._collapsed_width || nodeW) : (nodeW + 1);
+        let localH = isCollapsed ? titleHeight : (nodeH + titleHeight);
+
+        // If LiteGraph provides getBounding, use it for exact pixel fidelity
+        if (typeof node.getBounding === "function") {
+          try {
+            const b = node.getBounding();
+            if (b && typeof b[0] === "number" && typeof b[2] === "number" && b[2] > 0 && b[3] > 0) {
+              const posX = node.pos && typeof node.pos[0] === "number" ? node.pos[0] : 0;
+              const posY = node.pos && typeof node.pos[1] === "number" ? node.pos[1] : 0;
+              localX = b[0] - posX;
+              localY = b[1] - posY;
+              localW = b[2];
+              localH = b[3];
+            }
+          } catch (_) {}
+        }
+
+        const x = localX - pad;
+        const y = localY - pad;
+        const w = localW + pad * 2;
+        const h = localH + pad * 2;
+
+        const isBoxShape = Boolean(
+          node._shape === (window.LiteGraph && window.LiteGraph.BOX_SHAPE) ||
+          node.constructor?.shape === (window.LiteGraph && window.LiteGraph.BOX_SHAPE)
+        );
+        const baseRadius = isBoxShape ? 2 : ((canvas && canvas.round_radius) || 8);
+        const radius = Math.min(Math.max(baseRadius, baseRadius / scale), Math.min(w, h) / 2);
+
+        // Outer electric blue glowing pulse border around the ENTIRE node (body + title bar)
+        // Layer 1: Ambient glowing aura with breathing shadow blur
+        ctx.lineWidth = Math.max(4, 5.5 / scale);
+        ctx.strokeStyle = `rgba(59, 130, 246, ${currentAlpha * 0.95})`;
+        ctx.shadowColor = "rgba(59, 130, 246, 0.95)";
+        ctx.shadowBlur = Math.max(16, 24 / scale) * currentAlpha;
+        drawRoundedRect(ctx, x, y, w, h, radius);
+        ctx.stroke();
+
+        // Layer 2: Ultra-crisp bright core border line
+        ctx.lineWidth = Math.max(2, 2.5 / scale);
+        ctx.strokeStyle = `rgba(147, 197, 253, ${currentAlpha * 0.95})`;
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+
+        // Layer 3: Subtle ambient translucent tint during peak brightness
+        ctx.fillStyle = `rgba(59, 130, 246, ${currentAlpha * 0.08})`;
+        ctx.fill();
+
+        ctx.restore();
+      }
+    };
+
+    // 60fps smooth pulse loop
+    const step = (now) => {
+      const elapsed = now - startTime;
+      if (elapsed >= totalDuration) {
+        cleanup();
+        return;
+      }
+
+      // Smooth sine wave for each pulse breathing cycle
+      const cycleProgress = (elapsed % cycleDuration) / cycleDuration;
+      currentAlpha = Math.sin(cycleProgress * Math.PI);
+
+      // Also pulse node box and title colors
+      if (currentAlpha > 0.4) {
+        node.boxcolor = "#3b82f6";
         node.color = "#2563eb";
       } else {
         node.boxcolor = originalBoxcolor;
         node.color = originalColor;
       }
-      canvas.setDirty(true, true);
 
-      if (count >= 6) {
-        clearInterval(pulseInterval);
-        node.boxcolor = originalBoxcolor;
-        node.color = originalColor;
-        canvas.setDirty(true, true);
-      }
-    }, 200);
+      canvas.setDirty(true, true);
+      animId = requestAnimationFrame(step);
+    };
+
+    animId = requestAnimationFrame(step);
   }
 
   /**

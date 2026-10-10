@@ -406,20 +406,14 @@ export class ChatUI {
     this.panel.querySelector("#cm-tag-selected").addEventListener("click", () => {
       const selected = this.extractor.getSelectedNodes();
       if (selected.length > 0) {
-        const res = this.actions.locateNode(selected[0].id);
-        if (res.success) {
-          Toast.info(this.t("locatedNode", { id: selected[0].id, name: res.nodeTitle }));
-        }
+        this.actions.locateNode(selected[0].id);
       }
     });
 
     // Clicking Error Tag: Locate offending error node on canvas
     this.panel.querySelector("#cm-tag-error").addEventListener("click", () => {
       if (this.extractor.lastError?.node_id) {
-        const res = this.actions.locateNode(this.extractor.lastError.node_id);
-        if (res.success) {
-          Toast.info(this.t("locatedNode", { id: this.extractor.lastError.node_id, name: res.nodeTitle }));
-        }
+        this.actions.locateNode(this.extractor.lastError.node_id);
       } else {
         this.sendMessage(this.t("promptDiagnoseErr"));
       }
@@ -451,9 +445,7 @@ export class ChatUI {
         const nodeId = nodeTag.getAttribute("data-node-id");
         if (nodeId) {
           const res = this.actions.locateNode(nodeId);
-          if (res.success) {
-            Toast.info(this.t("locatedNode", { id: nodeId, name: res.nodeTitle }));
-          } else {
+          if (!res.success) {
             Toast.warning(this.t("nodeNotFound", { id: nodeId }));
           }
         }
@@ -466,9 +458,7 @@ export class ChatUI {
         const nodeId = locateBtn.getAttribute("data-node-id");
         if (nodeId) {
           const res = this.actions.locateNode(nodeId);
-          if (res.success) {
-            Toast.info(this.t("locatedNode", { id: nodeId, name: res.nodeTitle }));
-          } else {
+          if (!res.success) {
             Toast.warning(this.t("nodeNotFound", { id: nodeId }));
           }
         }

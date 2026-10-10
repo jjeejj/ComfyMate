@@ -53,26 +53,31 @@ export function renderMarkdown(text, t = (k) => k) {
     // Strikethrough: ~~text~~
     s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");
 
-    // Restore inline code snippets safely
+    // 1. Support plain text "Node #123 [Type]" or "Node #123"
+    // (Must run BEFORE restoring inline codes so it never matches inside already-generated tags)
+    s = s.replace(/(?:[📍📌🎯]\s*)?\bNode #(\d+)(?:\s*\[([^\]]+)\])?/gu, (match, nid, ntype) => {
+      const cleanType = ntype ? ntype.replace(/^[📍📌🎯]\s*/u, "").trim() : "";
+      const label = cleanType ? `Node #${nid} [${cleanType}]` : `Node #${nid}`;
+      return `<span class="cm-node-tag" data-node-id="${nid}" title="${t("locateNode") || "在画布中定位此节点"}">📍 ${label}</span>`;
+    });
+
+    // 2. Restore inline code snippets safely
     inlineCodes.forEach((c, idx) => {
       const esc = c
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
 
-      const nodeMatch = c.match(/^(?:Node\s*)?#(\d+)(?:\s*\[([^\]]+)\])?$/i);
+      const cleanC = c.replace(/^[📍📌🎯]\s*/u, "").trim();
+      const nodeMatch = cleanC.match(/^(?:Node\s*)?#(\d+)(?:\s*\[([^\]]+)\])?$/iu);
       if (nodeMatch) {
         const nid = nodeMatch[1];
-        s = s.replace(`__CM_INLINE_CODE_${idx}__`, `<span class="cm-node-tag" data-node-id="${nid}" title="${t("locateNode") || "在画布中定位此节点"}">📍 ${esc}</span>`);
+        const ntype = nodeMatch[2] ? nodeMatch[2].trim() : "";
+        const label = ntype ? `Node #${nid} [${ntype}]` : `Node #${nid}`;
+        s = s.replace(`__CM_INLINE_CODE_${idx}__`, `<span class="cm-node-tag" data-node-id="${nid}" title="${t("locateNode") || "在画布中定位此节点"}">📍 ${label}</span>`);
       } else {
         s = s.replace(`__CM_INLINE_CODE_${idx}__`, `<code class="cm-inline-code">${esc}</code>`);
       }
-    });
-
-    // Support plain text "Node #123 [Type]" or "Node #123"
-    s = s.replace(/\bNode #(\d+)(?:\s*\[([^\]]+)\])?/g, (match, nid, ntype) => {
-      const label = ntype ? `Node #${nid} [${ntype}]` : `Node #${nid}`;
-      return `<span class="cm-node-tag" data-node-id="${nid}" title="${t("locateNode") || "在画布中定位此节点"}">📍 ${label}</span>`;
     });
 
     return s;
