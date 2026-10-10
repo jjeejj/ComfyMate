@@ -35,6 +35,16 @@ def get_attachments_dir() -> Path:
         user_dir = Path(folder_paths.get_user_directory())
         target = user_dir / "comfymate" / "attachments"
         target.mkdir(parents=True, exist_ok=True)
+        if local_dir.is_dir():
+            for p in local_dir.glob("*"):
+                if p.is_file():
+                    dest = target / p.name
+                    if not dest.exists():
+                        try:
+                            import shutil
+                            shutil.copy2(p, dest)
+                        except Exception:
+                            pass
         return target
     except Exception:
         local_dir.mkdir(parents=True, exist_ok=True)
@@ -217,7 +227,11 @@ def resolve_attachment_to_base64(img_ref: str) -> str:
     """If img_ref is a local attachment URL (/comfymate/api/attachment/xxx), read it from disk and return data URL."""
     if isinstance(img_ref, str) and img_ref.startswith("/comfymate/api/attachment/"):
         filename = Path(img_ref).name
-        file_path = ATTACHMENTS_DIR / filename
+        file_path = get_attachments_dir() / filename
+        if not file_path.is_file():
+            legacy_file = Path(__file__).resolve().parent.parent / "storage" / "attachments" / filename
+            if legacy_file.is_file():
+                file_path = legacy_file
         if file_path.is_file():
             try:
                 ext = file_path.suffix.lower()
@@ -283,14 +297,15 @@ async def handle_upload_attachment(request: web.Request) -> web.Response:
         if not detected_ext:
             return web.json_response({"status": "error", "message": "Unsupported file format. Only JPEG, PNG, WEBP, GIF, and BMP are allowed."}, status=400)
 
-        ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
+        attachments_dir = get_attachments_dir()
+        attachments_dir.mkdir(parents=True, exist_ok=True)
         safe_stem = Path(orig_name).stem.replace(" ", "_")[:30]
         if not safe_stem:
             safe_stem = "image"
 
         unique_id = uuid.uuid4().hex[:10]
         saved_filename = f"{unique_id}_{safe_stem}{detected_ext}"
-        target_path = ATTACHMENTS_DIR / saved_filename
+        target_path = attachments_dir / saved_filename
 
         with open(target_path, "wb") as f:
             f.write(file_bytes)
@@ -312,10 +327,14 @@ async def handle_get_attachment(request: web.Request) -> web.Response:
     try:
         filename = request.match_info.get("filename", "")
         safe_filename = Path(filename).name
-        file_path = ATTACHMENTS_DIR / safe_filename
+        file_path = get_attachments_dir() / safe_filename
 
         if not file_path.is_file():
-            return web.Response(status=404, text="Attachment not found")
+            legacy_file = Path(__file__).resolve().parent.parent / "storage" / "attachments" / safe_filename
+            if legacy_file.is_file():
+                file_path = legacy_file
+            else:
+                return web.Response(status=404, text="Attachment not found")
 
         return web.FileResponse(
             path=file_path,

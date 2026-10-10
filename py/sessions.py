@@ -25,13 +25,15 @@ def get_sessions_dir() -> Path:
         user_dir = Path(folder_paths.get_user_directory())
         target = user_dir / "comfymate" / "sessions"
         target.mkdir(parents=True, exist_ok=True)
-        if local_dir.is_dir() and not any(target.glob("*.json")):
+        if local_dir.is_dir():
             for p in local_dir.glob("*.json"):
-                try:
-                    import shutil
-                    shutil.copy2(p, target / p.name)
-                except Exception:
-                    pass
+                dest = target / p.name
+                if not dest.exists():
+                    try:
+                        import shutil
+                        shutil.copy2(p, dest)
+                    except Exception:
+                        pass
         return target
     except Exception:
         local_dir.mkdir(parents=True, exist_ok=True)
@@ -59,10 +61,10 @@ def sanitize_session_id(session_id: str) -> Optional[str]:
 
 def list_sessions() -> List[Dict[str, Any]]:
     """List all saved sessions ordered by updated_at descending."""
-    ensure_sessions_dir()
+    sessions_dir = ensure_sessions_dir()
     sessions = []
 
-    for file_path in SESSIONS_DIR.glob("*.json"):
+    for file_path in sessions_dir.glob("*.json"):
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -91,9 +93,15 @@ def get_session(session_id: str) -> Optional[Dict[str, Any]]:
     if not safe_id:
         return None
 
-    target = SESSIONS_DIR / f"{safe_id}.json"
+    sessions_dir = ensure_sessions_dir()
+    target = sessions_dir / f"{safe_id}.json"
     if not target.is_file():
-        return None
+        # Fallback to legacy local directory if present
+        legacy = Path(__file__).resolve().parent.parent / "storage" / "sessions" / f"{safe_id}.json"
+        if legacy.is_file():
+            target = legacy
+        else:
+            return None
 
     try:
         with open(target, "r", encoding="utf-8") as f:
@@ -134,7 +142,8 @@ def save_session(data: Dict[str, Any]) -> Dict[str, Any]:
     if not safe_id:
         safe_id = f"sess_{int(time.time())}_{uuid.uuid4().hex[:6]}"
 
-    target = SESSIONS_DIR / f"{safe_id}.json"
+    sessions_dir = ensure_sessions_dir()
+    target = sessions_dir / f"{safe_id}.json"
 
     # Derive default title if missing
     title = data.get("title")
@@ -183,12 +192,15 @@ def delete_session(session_id: str) -> bool:
     if not safe_id:
         return False
 
-    target = SESSIONS_DIR / f"{safe_id}.json"
-    if target.is_file():
-        try:
-            target.unlink()
-            return True
-        except Exception as e:
-            logger.error(f"Failed to delete session {session_id}: {e}", exc_info=True)
-            return False
-    return False
+    sessions_dir = ensure_sessions_dir()
+    target = sessions_dir / f"{safe_id}.json"
+    legacy = Path(__file__).resolve().parent.parent / "storage" / "sessions" / f"{safe_id}.json"
+    deleted = False
+    for t in (target, legacy):
+        if t.is_file():
+            try:
+                t.unlink()
+                deleted = True
+            except Exception as e:
+                logger.error(f"Failed to delete session {session_id}: {e}", exc_info=True)
+    return deleted
