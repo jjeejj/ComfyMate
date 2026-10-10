@@ -1,7 +1,7 @@
 [project]
 name = "comfymate"
 description = "Context-aware intelligent AI copilot inside ComfyUI. Explains workflows, analyzes nodes, and diagnoses runtime errors."
-version = "1.0.0"
+version = "1.0.1"
 readme = "README.md"
 license = { text = "MIT" }
 dependencies = [
