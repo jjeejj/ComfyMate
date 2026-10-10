@@ -39,7 +39,7 @@ export class ChatUI {
     await this._createDOM();
     this.settingsModal = new SettingsModal(this._getComponentContext());
     this._restoreHistory();
-    this._loadConfig();
+    await this._loadConfig();
     this._startContextSync();
     this._setupGlobalShortcuts();
   }
@@ -1355,12 +1355,13 @@ export class ChatUI {
         host === "0.0.0.0" ||
         host.startsWith("192.168.") ||
         host.startsWith("10.") ||
-        host.endsWith(".local");
+        host.endsWith(".local") ||
+        host.endsWith(".lan");
     } catch (_) {
       isLocal = p.base_url.includes("localhost") || p.base_url.includes("127.0.0.1");
     }
     if (isLocal) {
-      return Boolean(p.models && p.models.length > 0 && p.enabled !== false);
+      return Boolean(p.enabled !== false);
     }
     const hasKey = Boolean(
       (p.api_key && p.api_key.trim().length > 0) ||
@@ -1370,7 +1371,8 @@ export class ChatUI {
   }
 
   _renderModelSelector() {
-    const selector = this.panel.querySelector("#cm-active-model-select");
+    const selector = this.panel?.querySelector("#cm-active-model-select");
+    if (!selector) return;
     selector.innerHTML = "";
 
     const allProviders = this.config?.providers || [];
@@ -1378,13 +1380,20 @@ export class ChatUI {
 
     if (configuredProviders.length === 0) {
       const opt = document.createElement("option");
-      opt.textContent = this.t("noConfiguredModels");
+      opt.textContent = this.t("noConfiguredModels") || "⚠️ 未配置模型 (点击去设置)";
       opt.value = "";
+      opt.selected = true;
       selector.appendChild(opt);
+      selector.value = "";
       return;
     }
 
-    let activeFound = false;
+    const targetVal = (this.config?.active_provider_id && this.config?.active_model)
+      ? `${this.config.active_provider_id}::${this.config.active_model}`
+      : "";
+
+    let firstOptionVal = "";
+    let matchedOption = null;
 
     for (const p of configuredProviders) {
       const optgroup = document.createElement("optgroup");
@@ -1393,20 +1402,33 @@ export class ChatUI {
       const models = (p.models && p.models.length > 0) ? p.models : ["default"];
       for (const m of models) {
         const opt = document.createElement("option");
-        opt.value = `${p.id}::${m}`;
-        opt.textContent = m;
-        if (p.id === this.config.active_provider_id && m === this.config.active_model) {
-          opt.selected = true;
-          activeFound = true;
+        const val = `${p.id}::${m}`;
+        opt.value = val;
+        opt.textContent = `${p.name || 'Provider'}: ${m}`;
+
+        if (!firstOptionVal) {
+          firstOptionVal = val;
         }
+
+        if (targetVal && val === targetVal) {
+          matchedOption = opt;
+          opt.selected = true;
+          opt.defaultSelected = true;
+        }
+
         optgroup.appendChild(opt);
       }
       selector.appendChild(optgroup);
     }
 
-    if (!activeFound && selector.options.length > 0 && selector.options[0].value) {
-      selector.selectedIndex = 0;
-      const [pid, model] = selector.value.split("::");
+    // Explicitly set selector.value and ensure selection is synced with DOM
+    if (matchedOption) {
+      selector.value = targetVal;
+    } else if (firstOptionVal) {
+      selector.value = firstOptionVal;
+      const sep = firstOptionVal.indexOf("::");
+      const pid = firstOptionVal.substring(0, sep);
+      const model = firstOptionVal.substring(sep + 2);
       this.config.active_provider_id = pid;
       this.config.active_model = model;
       ApiClient.saveConfig({
@@ -1425,6 +1447,7 @@ export class ChatUI {
     this.settingsModal.close();
     this.editingProviderId = null;
     this.isAddingNew = false;
+    this._renderModelSelector();
   }
 
   async _testConnectionEndpoint(providerId, apiType, baseUrl, apiKey, model = null, models = []) {

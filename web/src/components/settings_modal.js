@@ -47,6 +47,9 @@ export class SettingsModal {
     this.modalEl.classList.add("hidden");
     this.ctx.editingProviderId = null;
     this.ctx.isAddingNew = false;
+    if (this.ctx._owner && typeof this.ctx._owner._renderModelSelector === "function") {
+      this.ctx._owner._renderModelSelector();
+    }
   }
 
   isOpen() {

@@ -124,6 +124,20 @@
   border-color: #3b82f6;
 }
 
+.cm-model-selector optgroup {
+  background: #18181b;
+  color: #93c5fd;
+  font-weight: 600;
+  font-style: normal;
+  padding: 4px 6px;
+}
+
+.cm-model-selector option {
+  background: #18181b;
+  color: #f4f4f5;
+  padding: 4px 8px;
+}
+
 .comfymate-icon-btn {
   background: transparent;
   border: none;

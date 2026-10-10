@@ -33,19 +33,35 @@ export function renderModelsPane(ctx, container) {
       badgeText = ctx.t("badgeCompatible");
     }
     const displayName = getProviderDisplayName(p, ctx.getEffectiveLang());
+    const isActive = p.id === ctx.config.active_provider_id;
 
     card.innerHTML = `
       <div class="cm-provider-info">
         <span class="cm-provider-name">${escapeHtml(displayName)}</span>
         <span class="cm-tag-badge">${escapeHtml(badgeText)}</span>
+        ${isActive ? `<span class="cm-tag-badge" style="background:rgba(59,130,246,0.18); color:#60a5fa; border:1px solid rgba(59,130,246,0.4); font-weight:600;">✓ ${escapeHtml(ctx.t("activeProviderBadge") || "当前使用")}</span>` : ""}
         <span class="cm-status-dot ${isConfigured ? 'configured' : 'unconfigured'}" title="${isConfigured ? ctx.t('configuredDot') : ctx.t('unconfiguredDot')}"></span>
         ${!isConfigured ? `<span style="font-size:11px; color:#a1a1aa;">${ctx.t('unconfiguredTag')}</span>` : ""}
       </div>
       <div class="cm-card-actions">
+        ${!isActive && isConfigured ? `<button class="cm-card-btn cm-btn-set-active" data-id="${p.id}" style="color:#93c5fd; border:1px solid rgba(59,130,246,0.35);">${ctx.t("setActiveBtn") || "设为当前"}</button>` : ""}
         <button class="cm-card-btn cm-btn-edit-p" data-id="${p.id}">${ctx.t("editBtn")}</button>
         <button class="cm-card-btn danger cm-btn-del-p" data-id="${p.id}">${ctx.t("delBtn")}</button>
       </div>
     `;
+
+    const setActiveBtn = card.querySelector(".cm-btn-set-active");
+    if (setActiveBtn) {
+      setActiveBtn.addEventListener("click", () => {
+        ctx.config.active_provider_id = p.id;
+        ctx.config.active_model = p.models?.[0] || "default";
+        ctx.saveConfig();
+        if (ctx.toast) {
+          ctx.toast.success(ctx.t("activeSetSuccess", { name: displayName }) || `已切换当前服务商为 ${displayName}`);
+        }
+        renderModelsPane(ctx, container);
+      });
+    }
 
     card.querySelector(".cm-btn-edit-p").addEventListener("click", () => {
       ctx.editingProviderId = p.id;
@@ -446,6 +462,20 @@ export function renderModelsPane(ctx, container) {
 
       // Save
       formCard.querySelector("#cm-btn-save-edit").addEventListener("click", () => {
+        // 1. Auto-commit any pending model name in input box
+        const pendingModel = inputNewModel?.value?.trim();
+        if (pendingModel) {
+          const items = pendingModel.split(/[\r\n,]+/).map((s) => s.trim()).filter((s) => s.length > 0);
+          items.forEach((item) => {
+            if (!currentModels.includes(item)) {
+              currentModels.push(item);
+            }
+          });
+          if (!selectedModel && currentModels.length > 0) {
+            selectedModel = currentModels[0];
+          }
+        }
+
         const chosenMode = presetSelect.value;
         const isCustomMode = chosenMode === "__custom__";
         let apiType = "openai";
@@ -465,13 +495,36 @@ export function renderModelsPane(ctx, container) {
         const newUrl = urlInput.value.trim() || (chosenMode === "anthropic" ? "https://api.anthropic.com/v1" : (chosenMode === "openai" ? "https://api.openai.com/v1" : "http://localhost:11434/v1"));
         const newKey = keyInput.value.trim();
 
+        // 2. Ensure currentModels has at least one valid fallback model
+        if (currentModels.length === 0) {
+          if (chosenMode === "openai") {
+            currentModels = ["gpt-4o", "gpt-4o-mini", "o3-mini"];
+          } else if (chosenMode === "anthropic") {
+            currentModels = ["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022"];
+          } else {
+            const lowerUrl = newUrl.toLowerCase();
+            if (lowerUrl.includes("deepseek")) {
+              currentModels = ["deepseek-chat", "deepseek-reasoner"];
+            } else if (lowerUrl.includes("localhost") || lowerUrl.includes("11434")) {
+              currentModels = ["deepseek-r1:8b", "qwen2.5:7b"];
+            } else if (lowerUrl.includes("openrouter")) {
+              currentModels = ["google/gemma-4-31b-it:free", "deepseek/deepseek-chat"];
+            } else if (lowerUrl.includes("siliconflow")) {
+              currentModels = ["deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1"];
+            } else {
+              currentModels = ["default"];
+            }
+          }
+          selectedModel = currentModels[0];
+        }
+
         targetP.api_type = apiType;
         targetP.name = newName;
         targetP.base_url = newUrl;
         targetP.api_key = newKey;
         targetP.models = [...currentModels];
 
-        if (!isCustomMode && !newKey) {
+        if (!isCustomMode && !newKey && !targetP.api_key_masked) {
           if (ctx.toast) {
             ctx.toast.warning(ctx.t("cloudUnconfiguredNotice"));
           }
@@ -479,17 +532,19 @@ export function renderModelsPane(ctx, container) {
 
         if (ctx.isAddingNew) {
           ctx.config.providers.push(targetP);
-          if (ctx.isProviderConfigured(targetP)) {
-            ctx.config.active_provider_id = targetP.id;
-            ctx.config.active_model = selectedModel || targetP.models[0] || null;
-          }
+        }
+
+        // 3. Activate provider if configured or if no active provider exists
+        if (ctx.isProviderConfigured(targetP) || !ctx.config.active_provider_id) {
+          ctx.config.active_provider_id = targetP.id;
+          ctx.config.active_model = (selectedModel && currentModels.includes(selectedModel))
+            ? selectedModel
+            : (currentModels[0] || "default");
         } else if (ctx.config.active_provider_id === targetP.id) {
           if (selectedModel && currentModels.includes(selectedModel)) {
             ctx.config.active_model = selectedModel;
           } else if (currentModels.length > 0) {
             ctx.config.active_model = currentModels[0];
-          } else {
-            ctx.config.active_model = null;
           }
         }
 
