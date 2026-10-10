@@ -59,7 +59,20 @@ export function renderMarkdown(text, t = (k) => k) {
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
-      s = s.replace(`__CM_INLINE_CODE_${idx}__`, `<code class="cm-inline-code">${esc}</code>`);
+
+      const nodeMatch = c.match(/^(?:Node\s*)?#(\d+)(?:\s*\[([^\]]+)\])?$/i);
+      if (nodeMatch) {
+        const nid = nodeMatch[1];
+        s = s.replace(`__CM_INLINE_CODE_${idx}__`, `<span class="cm-node-tag" data-node-id="${nid}" title="${t("locateNode") || "在画布中定位此节点"}">📍 ${esc}</span>`);
+      } else {
+        s = s.replace(`__CM_INLINE_CODE_${idx}__`, `<code class="cm-inline-code">${esc}</code>`);
+      }
+    });
+
+    // Support plain text "Node #123 [Type]" or "Node #123"
+    s = s.replace(/\bNode #(\d+)(?:\s*\[([^\]]+)\])?/g, (match, nid, ntype) => {
+      const label = ntype ? `Node #${nid} [${ntype}]` : `Node #${nid}`;
+      return `<span class="cm-node-tag" data-node-id="${nid}" title="${t("locateNode") || "在画布中定位此节点"}">📍 ${label}</span>`;
     });
 
     return s;
@@ -202,8 +215,65 @@ export function renderMarkdown(text, t = (k) => k) {
   closeAll();
   let html = output.join("\n");
 
-  // Restore code blocks with syntax block wrapper and copy button
+  // Restore code blocks with syntax block wrapper or interactive action card
   codeBlocks.forEach((item, idx) => {
+    // Check if this is an executable action block
+    const isActionLang = item.lang && item.lang.toLowerCase() === "comfymate-action";
+    const isJsonAction =
+      (item.lang === "json" || !item.lang || item.lang === "text") &&
+      item.code.includes('"action"') &&
+      item.code.includes('"set_parameters"');
+
+    if (isActionLang || isJsonAction) {
+      try {
+        const parsed = JSON.parse(item.code);
+        if (parsed && parsed.action === "set_parameters" && parsed.node_id) {
+          const nodeId = parsed.node_id;
+          const params = parsed.parameters || {};
+          const reason = parsed.reason || "";
+          const paramsJsonStr = encodeURIComponent(JSON.stringify(params));
+          const reasonEsc = reason
+            ? reason.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            : "";
+
+          const paramRows = Object.entries(params)
+            .map(([k, v]) => {
+              const kEsc = String(k).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+              const vEsc = String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+              return `<div class="cm-action-param-row"><span class="cm-action-param-key">${kEsc}:</span> <span class="cm-action-param-val">${vEsc}</span></div>`;
+            })
+            .join("");
+
+          const cardHtml = `
+            <div class="cm-action-card" data-action="set_parameters" data-node-id="${nodeId}" data-params="${paramsJsonStr}">
+              <div class="cm-action-header">
+                <div class="cm-action-title">
+                  <span class="cm-action-icon">⚡</span>
+                  <span>${t("suggestedAction") || "AI 建议参数调整"}</span>
+                </div>
+                <button class="cm-action-btn-locate" type="button" data-node-id="${nodeId}" title="${t("locateNode") || "在画布中定位节点"}">
+                  <span>📍</span> <span>Node #${nodeId}</span>
+                </button>
+              </div>
+              <div class="cm-action-body">
+                <div class="cm-action-params">${paramRows}</div>
+                ${reasonEsc ? `<div class="cm-action-reason">${reasonEsc}</div>` : ""}
+              </div>
+              <div class="cm-action-footer">
+                <button class="cm-action-btn cm-action-btn-apply" type="button" data-node-id="${nodeId}" data-params="${paramsJsonStr}">
+                  <span>▶️</span> <span>${t("applyParams") || "应用到画布"}</span>
+                </button>
+              </div>
+            </div>
+          `;
+          html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
+          return;
+        }
+      } catch (e) {
+        // Fall back to normal code block rendering
+      }
+    }
+
     const escapedCode = item.code
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")

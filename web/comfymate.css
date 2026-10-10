@@ -1745,6 +1745,340 @@
   gap: 8px;
 }
 
+/* ==========================================================================
+   Canvas Actions & Interactive Elements (Option 1)
+   ========================================================================== */
+
+/* Clickable Node Tag in Chat */
+.cm-node-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  margin: 1px 2px;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.14);
+  border: 1px solid rgba(59, 130, 246, 0.32);
+  color: #93c5fd;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  vertical-align: baseline;
+}
+
+.cm-node-tag:hover {
+  background: rgba(59, 130, 246, 0.28);
+  border-color: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+.cm-node-tag:active {
+  transform: translateY(0);
+}
+
+/* Action Card (Executable Parameter Changes) */
+.cm-action-card {
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: rgba(24, 24, 28, 0.95);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cm-action-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 8px;
+}
+
+.cm-action-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #93c5fd;
+}
+
+.cm-action-icon {
+  font-size: 14px;
+}
+
+.cm-action-btn-locate {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e4e4e7;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cm-action-btn-locate:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+  color: #93c5fd;
+}
+
+.cm-action-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cm-action-params {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.cm-action-param-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.cm-action-param-key {
+  color: #a1a1aa;
+}
+
+.cm-action-param-val {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.cm-action-reason {
+  font-size: 11.5px;
+  color: #a1a1aa;
+  line-height: 1.4;
+  padding-left: 8px;
+  border-left: 2px solid rgba(59, 130, 246, 0.4);
+}
+
+.cm-action-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.cm-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.cm-action-btn-apply {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+}
+
+.cm-action-btn-apply:hover {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.5);
+  transform: translateY(-1px);
+}
+
+.cm-action-btn-undo {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fbbf24;
+}
+
+.cm-action-btn-undo:hover {
+  background: rgba(251, 191, 36, 0.15);
+  border-color: #fbbf24;
+}
+
+.cm-action-applied-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: #34d399;
+  font-weight: 600;
+}
+
+/* Workflow Doctor Card */
+.cm-doctor-card {
+  margin: 10px 0;
+  padding: 14px;
+  background: rgba(24, 24, 28, 0.95);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cm-doctor-card.healthy {
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.cm-doctor-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 10px;
+}
+
+.cm-doctor-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.cm-doctor-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cm-doctor-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #f4f4f5;
+}
+
+.cm-doctor-subtitle {
+  font-size: 11.5px;
+  color: #a1a1aa;
+}
+
+.cm-doctor-success-text {
+  font-size: 12.5px;
+  color: #34d399;
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
+.cm-doctor-issues-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.cm-doctor-issue-item {
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cm-doctor-issue-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cm-doctor-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.cm-doctor-badge.critical {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.cm-doctor-badge.warning {
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fde68a;
+}
+
+.cm-doctor-badge.info {
+  background: rgba(59, 130, 246, 0.18);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+}
+
+.cm-doctor-issue-msg {
+  font-size: 12px;
+  color: #e4e4e7;
+  line-height: 1.45;
+}
+
+.cm-doctor-issue-fix {
+  font-size: 11.5px;
+  color: #a1a1aa;
+  line-height: 1.4;
+  padding-left: 6px;
+  border-left: 2px solid rgba(59, 130, 246, 0.4);
+}
+
+.cm-doctor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.cm-doctor-btn-ask-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+}
+
+.cm-doctor-btn-ask-ai:hover {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
+  transform: translateY(-1px);
+}
+
+
 
 
 

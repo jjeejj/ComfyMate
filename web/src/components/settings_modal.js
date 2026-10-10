@@ -1,5 +1,6 @@
 import { renderModelsPane } from "./settings/models_pane.js";
 import { renderGeneralPane } from "./settings/general_pane.js";
+import { loadTemplate, renderTemplate } from "../utils/template_loader.js";
 
 /**
  * Settings Modal Dialog Controller.
@@ -9,40 +10,16 @@ export class SettingsModal {
     this.ctx = appContext;
     this.modalEl = null;
     this.currentTab = "models";
-    this._createDOM();
+    this.ready = this._createDOM();
   }
 
-  _createDOM() {
+  async _createDOM() {
     this.modalEl = document.createElement("div");
     this.modalEl.className = "comfymate-modal-backdrop hidden";
     this.modalEl.id = "cm-settings-dialog-backdrop";
-    this.modalEl.innerHTML = `
-      <div class="comfymate-dialog">
-        <!-- Left Sidebar Navigation -->
-        <div class="cm-dialog-sidebar">
-          <div class="cm-dialog-sidebar-title" id="cm-txt-set-title">${this.ctx.t('settingsTitle')}</div>
-          <div class="cm-nav-item" data-tab="general" id="cm-tab-general">${this.ctx.t('navGeneral')}</div>
-          <div class="cm-nav-item active" data-tab="models" id="cm-tab-models">${this.ctx.t('navModels')}</div>
-        </div>
 
-        <!-- Right Content Area -->
-        <div class="cm-dialog-content">
-          <div class="cm-dialog-header">
-            <div class="cm-dialog-title-group">
-              <h2 id="cm-pane-title">${this.ctx.t('modelsTitle')}</h2>
-              <p id="cm-pane-subtitle">${this.ctx.t('modelsSubtitle')}</p>
-            </div>
-            <div class="cm-dialog-header-actions">
-              <button class="comfymate-icon-btn" id="cm-modal-close" style="font-size:16px;">✕</button>
-            </div>
-          </div>
-
-          <div class="cm-dialog-body" id="cm-dialog-pane-body">
-            <!-- Dynamically populated tab content -->
-          </div>
-        </div>
-      </div>
-    `;
+    const rawTemplate = await loadTemplate("./settings_modal.html", import.meta.url);
+    this.modalEl.innerHTML = renderTemplate(rawTemplate, (k) => this.ctx.t(k));
     document.body.appendChild(this.modalEl);
 
     // Close buttons & backdrop click
@@ -60,7 +37,8 @@ export class SettingsModal {
     });
   }
 
-  open(tab = "models") {
+  async open(tab = "models") {
+    await this.ready;
     this.modalEl.classList.remove("hidden");
     this.switchTab(tab);
   }

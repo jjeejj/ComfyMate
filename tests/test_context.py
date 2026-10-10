@@ -60,6 +60,16 @@ def test_config():
     print("✅ Config test passed!")
 
 
+def test_system_prompt_actions():
+    from py.context import build_system_prompt
+    prompt = build_system_prompt()
+    assert "comfymate-action" in prompt
+    assert "set_parameters" in prompt
+    assert "Node #<ID>" in prompt
+    print("✅ System prompt action instructions test passed!")
+
+
 if __name__ == "__main__":
     test_context_formatting()
     test_config()
+    test_system_prompt_actions()

@@ -1,0 +1,75 @@
+<div class="comfymate-resizer" id="cm-resizer" title="{{resizerTitle}}"></div>
+
+<!-- Panel Header -->
+<div class="comfymate-header">
+  <div class="comfymate-header-title">
+    <span>✨ ComfyMate</span>
+    <span class="comfymate-header-badge" id="cm-txt-copilot">{{copilot}}</span>
+  </div>
+  <div class="comfymate-header-actions">
+    <button class="comfymate-icon-btn" id="cm-btn-new-chat" title="{{btnNewChatTitle}}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+    </button>
+    <button class="comfymate-icon-btn" id="cm-btn-sessions" title="{{btnSessionsTitle}}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+    </button>
+    <button class="comfymate-icon-btn" id="cm-btn-settings" title="{{btnSettingsTitle}}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </button>
+    <button class="comfymate-icon-btn" id="cm-btn-close" title="{{btnCloseTitle}}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Quick Model Switcher in Chat Header -->
+<div class="comfymate-model-bar">
+  <span class="cm-model-bar-label" id="cm-txt-model-label">{{modelLabel}}</span>
+  <select class="cm-model-selector" id="cm-active-model-select" title="{{modelSelectorTitle}}"></select>
+</div>
+
+<!-- Context Bar -->
+<div class="comfymate-context-bar" id="cm-context-bar">
+  <span class="comfymate-tag" id="cm-tag-workflow">工作流: 0 节点</span>
+  <span class="comfymate-tag selected" id="cm-tag-selected" style="display:none;" title="{{locateNode}}">已选中: 0</span>
+  <span class="comfymate-tag error" id="cm-tag-error" style="display:none;" title="{{locateErrorNode}}">{{errorDetected}}</span>
+</div>
+
+<!-- Quick Action Pills -->
+<div class="comfymate-quick-actions">
+  <button class="comfymate-pill" data-action="explain_workflow" id="cm-pill-wf">{{explainWf}}</button>
+  <button class="comfymate-pill" data-action="explain_selected" id="cm-pill-sel">{{explainSel}}</button>
+  <button class="comfymate-pill" data-action="diagnose_error" id="cm-pill-err">{{diagnoseErr}}</button>
+  <button class="comfymate-pill" data-action="doctor_check" id="cm-pill-doctor">{{doctorBtn}}</button>
+</div>
+
+<!-- Chat Message Feed -->
+<div class="comfymate-messages" id="cm-messages">
+  <div class="comfymate-message assistant" id="cm-welcome-msg"></div>
+</div>
+
+<!-- Sessions History Drawer Overlay -->
+<div class="cm-sessions-overlay hidden" id="cm-sessions-overlay">
+  <div class="cm-sessions-header">
+    <div class="cm-sessions-title">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+      <span>{{sessionsHistory}}</span>
+    </div>
+    <div class="cm-sessions-actions">
+      <button class="comfymate-send-btn" id="cm-btn-new-chat-drawer" style="padding:4px 10px; font-size:11.5px; border-radius:6px; cursor:pointer;">+ {{newChat}}</button>
+      <button class="comfymate-icon-btn" id="cm-btn-close-sessions" title="关闭">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+  </div>
+  <div class="cm-sessions-list" id="cm-sessions-list"></div>
+</div>
+
+<!-- Input Area -->
+<div class="comfymate-input-area" id="cm-input-area">
+  <div class="cm-image-preview-bar" id="cm-image-preview-bar" style="display:none;"></div>
+  <div class="cm-input-row">
+    <textarea class="comfymate-textarea" id="cm-input" placeholder="{{placeholder}}"></textarea>
+    <button class="comfymate-send-btn" id="cm-btn-send">{{send}}</button>
+  </div>
+</div>

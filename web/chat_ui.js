@@ -1,14 +1,17 @@
 import { ContextExtractor } from "./src/canvas/extractor.js";
+import { CanvasActionManager } from "./src/canvas/actions.js";
 import { I18nManager, FORMAT_PRESETS } from "./src/i18n/index.js";
 import { renderMarkdown } from "./src/utils/markdown.js";
 import { ApiClient } from "./src/services/api.js";
 import { SettingsModal } from "./src/components/settings_modal.js";
 import { Toast, escapeHtml } from "./src/utils/toast.js";
+import { loadTemplate, renderTemplate } from "./src/utils/template_loader.js";
 
 export class ChatUI {
   constructor(app) {
     this.app = app;
     this.extractor = new ContextExtractor(app);
+    this.actions = new CanvasActionManager(app);
     this.messages = [];
     this.isStreaming = false;
     this.abortController = null;
@@ -26,10 +29,15 @@ export class ChatUI {
     this.isAddingNew = false;
     this._contextInterval = null;
 
-    // Create UI elements
-    this._createDOM();
-    this.settingsModal = new SettingsModal(this._getComponentContext());
+    // Asynchronous DOM & component initialization
+    this.panel = null;
+    this.settingsModal = null;
+    this.ready = this._init();
+  }
 
+  async _init() {
+    await this._createDOM();
+    this.settingsModal = new SettingsModal(this._getComponentContext());
     this._restoreHistory();
     this._loadConfig();
     this._startContextSync();
@@ -85,82 +93,12 @@ export class ChatUI {
 
   /* ---------------- DOM Construction & Event Binding ---------------- */
 
-  _createDOM() {
+  async _createDOM() {
     this.panel = document.createElement("div");
     this.panel.className = "comfymate-panel hidden";
-    this.panel.innerHTML = `
-      <div class="comfymate-resizer" id="cm-resizer" title="${this.t('resizerTitle')}"></div>
 
-      <div class="comfymate-header">
-        <div class="comfymate-header-title">
-          <span>✨ ComfyMate</span>
-          <span class="comfymate-header-badge" id="cm-txt-copilot">${this.t('copilot')}</span>
-        </div>
-        <div class="comfymate-header-actions">
-          <button class="comfymate-icon-btn" id="cm-btn-new-chat" title="${this.t('btnNewChatTitle') || '新建会话'}">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          </button>
-          <button class="comfymate-icon-btn" id="cm-btn-sessions" title="${this.t('btnSessionsTitle') || '历史会话'}">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          </button>
-          <button class="comfymate-icon-btn" id="cm-btn-settings" title="${this.t('btnSettingsTitle')}">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-          </button>
-          <button class="comfymate-icon-btn" id="cm-btn-close" title="${this.t('btnCloseTitle')}">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Quick Model Switcher in Chat Header -->
-      <div class="comfymate-model-bar">
-        <span class="cm-model-bar-label" id="cm-txt-model-label">${this.t('modelLabel')}</span>
-        <select class="cm-model-selector" id="cm-active-model-select" title="${this.t('modelSelectorTitle')}"></select>
-      </div>
-
-      <div class="comfymate-context-bar" id="cm-context-bar">
-        <span class="comfymate-tag" id="cm-tag-workflow">${this.t('wfNodes', { n: 0 })}</span>
-        <span class="comfymate-tag selected" id="cm-tag-selected" style="display:none;">${this.t('selectedNodes', { n: 0 })}</span>
-        <span class="comfymate-tag error" id="cm-tag-error" style="display:none;">${this.t('errorDetected')}</span>
-      </div>
-
-      <div class="comfymate-quick-actions">
-        <button class="comfymate-pill" data-action="explain_workflow" id="cm-pill-wf">${this.t('explainWf')}</button>
-        <button class="comfymate-pill" data-action="explain_selected" id="cm-pill-sel">${this.t('explainSel')}</button>
-        <button class="comfymate-pill" data-action="diagnose_error" id="cm-pill-err">${this.t('diagnoseErr')}</button>
-      </div>
-
-      <div class="comfymate-messages" id="cm-messages">
-        <div class="comfymate-message assistant" id="cm-welcome-msg"></div>
-      </div>
-
-      <!-- Sessions History Overlay -->
-      <div class="cm-sessions-overlay hidden" id="cm-sessions-overlay">
-        <div class="cm-sessions-header">
-          <div class="cm-sessions-title">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            <span>${this.t('sessionsHistory') || '历史会话'}</span>
-          </div>
-          <div class="cm-sessions-actions">
-            <button class="comfymate-send-btn" id="cm-btn-new-chat-drawer" style="padding:4px 10px; font-size:11.5px; border-radius:6px; cursor:pointer;">+ ${this.t('newChat') || '新建会话'}</button>
-            <button class="comfymate-icon-btn" id="cm-btn-close-sessions" title="关闭">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-          </div>
-        </div>
-        <div class="cm-sessions-list" id="cm-sessions-list"></div>
-      </div>
-
-
-      <div class="comfymate-input-area" id="cm-input-area">
-        <div class="cm-image-preview-bar" id="cm-image-preview-bar" style="display:none;"></div>
-        <div class="cm-input-row">
-          <textarea class="comfymate-textarea" id="cm-input" placeholder="${this.t('placeholder')}"></textarea>
-          <button class="comfymate-send-btn" id="cm-btn-send">${this.t('send')}</button>
-        </div>
-      </div>
-
-    `;
+    const rawTemplate = await loadTemplate("./src/components/panel.html", import.meta.url);
+    this.panel.innerHTML = renderTemplate(rawTemplate, (k) => this.t(k));
     document.body.appendChild(this.panel);
 
     this._updateStaticUIText();
@@ -169,11 +107,14 @@ export class ChatUI {
   }
 
   _updateStaticUIText() {
+    if (!this.panel) return;
     this.panel.querySelector("#cm-txt-copilot").textContent = this.t("copilot");
     this.panel.querySelector("#cm-txt-model-label").textContent = this.t("modelLabel");
     this.panel.querySelector("#cm-pill-wf").textContent = this.t("explainWf");
     this.panel.querySelector("#cm-pill-sel").textContent = this.t("explainSel");
     this.panel.querySelector("#cm-pill-err").textContent = this.t("diagnoseErr");
+    const pillDoc = this.panel.querySelector("#cm-pill-doctor");
+    if (pillDoc) pillDoc.textContent = this.t("doctorBtn") || "🩺 工作流体检";
     this.panel.querySelector("#cm-input").placeholder = this.t("placeholder");
     if (this.messages.length === 0) {
       const welcomeEl = this.panel.querySelector("#cm-welcome-msg");
@@ -455,16 +396,38 @@ export class ChatUI {
             return;
           }
           this.sendMessage(this.t("promptDiagnoseErr"));
+        } else if (action === "doctor_check") {
+          this._runDoctorCheck();
         }
       });
     });
 
-    this.panel.querySelector("#cm-tag-error").addEventListener("click", () => {
-      this.sendMessage(this.t("promptDiagnoseErr"));
+    // Clicking Selected Tag: Locate the selected node on canvas
+    this.panel.querySelector("#cm-tag-selected").addEventListener("click", () => {
+      const selected = this.extractor.getSelectedNodes();
+      if (selected.length > 0) {
+        const res = this.actions.locateNode(selected[0].id);
+        if (res.success) {
+          Toast.info(this.t("locatedNode", { id: selected[0].id, name: res.nodeTitle }));
+        }
+      }
     });
 
-    // Delegated click handler for code block copy buttons
+    // Clicking Error Tag: Locate offending error node on canvas
+    this.panel.querySelector("#cm-tag-error").addEventListener("click", () => {
+      if (this.extractor.lastError?.node_id) {
+        const res = this.actions.locateNode(this.extractor.lastError.node_id);
+        if (res.success) {
+          Toast.info(this.t("locatedNode", { id: this.extractor.lastError.node_id, name: res.nodeTitle }));
+        }
+      } else {
+        this.sendMessage(this.t("promptDiagnoseErr"));
+      }
+    });
+
+    // Delegated click handler for messages area: Copy, Node Tags, Action Cards, Doctor Reports
     this.panel.querySelector("#cm-messages").addEventListener("click", (e) => {
+      // 1. Code copy button
       const copyBtn = e.target.closest(".cm-code-copy");
       if (copyBtn) {
         const code = decodeURIComponent(copyBtn.getAttribute("data-code") || "");
@@ -479,15 +442,117 @@ export class ChatUI {
             console.warn("[ComfyMate] Copy failed:", err);
           });
         }
+        return;
+      }
+
+      // 2. Clickable Node Tag: Locate node on canvas
+      const nodeTag = e.target.closest(".cm-node-tag");
+      if (nodeTag) {
+        const nodeId = nodeTag.getAttribute("data-node-id");
+        if (nodeId) {
+          const res = this.actions.locateNode(nodeId);
+          if (res.success) {
+            Toast.info(this.t("locatedNode", { id: nodeId, name: res.nodeTitle }));
+          } else {
+            Toast.warning(this.t("nodeNotFound", { id: nodeId }));
+          }
+        }
+        return;
+      }
+
+      // 3. Action Card: Locate Node button
+      const locateBtn = e.target.closest(".cm-action-btn-locate, .cm-doctor-locate");
+      if (locateBtn) {
+        const nodeId = locateBtn.getAttribute("data-node-id");
+        if (nodeId) {
+          const res = this.actions.locateNode(nodeId);
+          if (res.success) {
+            Toast.info(this.t("locatedNode", { id: nodeId, name: res.nodeTitle }));
+          } else {
+            Toast.warning(this.t("nodeNotFound", { id: nodeId }));
+          }
+        }
+        return;
+      }
+
+      // 4. Action Card: Apply Parameters button
+      const applyBtn = e.target.closest(".cm-action-btn-apply");
+      if (applyBtn) {
+        const card = applyBtn.closest(".cm-action-card");
+        const nodeId = applyBtn.getAttribute("data-node-id");
+        const rawParams = decodeURIComponent(applyBtn.getAttribute("data-params") || "{}");
+        try {
+          const params = JSON.parse(rawParams);
+          const res = this.actions.applyParameters(nodeId, params);
+          if (res.success) {
+            Toast.success(this.t("appliedParams", { id: nodeId, name: res.nodeTitle }));
+            if (card) {
+              const footer = card.querySelector(".cm-action-footer");
+              if (footer) {
+                const oldValsJson = encodeURIComponent(JSON.stringify(res.oldValues));
+                footer.innerHTML = `
+                  <span class="cm-action-applied-badge">✅ ${this.t("actionApplied") || "已生效"}</span>
+                  <button class="cm-action-btn cm-action-btn-undo" type="button" data-node-id="${nodeId}" data-old-values="${oldValsJson}">
+                    <span>↩️</span> <span>${this.t("undoParams") || "撤销修改"}</span>
+                  </button>
+                `;
+              }
+            }
+          } else {
+            Toast.error(this.t("applyFailed", { msg: res.message || "Unknown error" }));
+          }
+        } catch (err) {
+          console.error("[ComfyMate] Failed to apply params:", err);
+          Toast.error(this.t("applyFailed", { msg: err.message }));
+        }
+        return;
+      }
+
+      // 5. Action Card: Undo Parameters button
+      const undoBtn = e.target.closest(".cm-action-btn-undo");
+      if (undoBtn) {
+        const card = undoBtn.closest(".cm-action-card");
+        const nodeId = undoBtn.getAttribute("data-node-id");
+        const rawOldVals = decodeURIComponent(undoBtn.getAttribute("data-old-values") || "{}");
+        try {
+          const oldValues = JSON.parse(rawOldVals);
+          const res = this.actions.undoParameters(nodeId, oldValues);
+          if (res.success) {
+            Toast.info(this.t("undoneParams", { id: nodeId }));
+            if (card) {
+              const footer = card.querySelector(".cm-action-footer");
+              const origParamsJson = card.getAttribute("data-params") || "{}";
+              if (footer) {
+                footer.innerHTML = `
+                  <button class="cm-action-btn cm-action-btn-apply" type="button" data-node-id="${nodeId}" data-params="${origParamsJson}">
+                    <span>▶️</span> <span>${this.t("applyParams") || "应用到画布"}</span>
+                  </button>
+                `;
+              }
+            }
+          }
+        } catch (err) {
+          console.error("[ComfyMate] Failed to undo params:", err);
+        }
+        return;
+      }
+
+      // 6. Doctor Card: Ask AI to Fix
+      const askAiBtn = e.target.closest(".cm-doctor-btn-ask-ai");
+      if (askAiBtn) {
+        const prompt = this.t("promptDoctorFix") || "请针对体检报告中发现的工作流问题，分析根因并给出具体的参数优化与修复操作。";
+        this.sendMessage(prompt);
+        return;
       }
     });
   }
 
-  toggle(forceState) {
+  async toggle(forceState) {
+    await this.ready;
     this.isVisible = forceState !== undefined ? forceState : !this.isVisible;
     if (this.isVisible) {
       this.panel.classList.remove("hidden");
-      this.panel.querySelector("#cm-input").focus();
+      this.panel.querySelector("#cm-input")?.focus();
     } else {
       this.panel.classList.add("hidden");
     }
@@ -691,6 +756,7 @@ export class ChatUI {
   }
 
   async sendMessage(customText = null) {
+    await this.ready;
     if (this.isStreaming) return;
 
     const input = this.panel.querySelector("#cm-input");
@@ -1350,8 +1416,9 @@ export class ChatUI {
     }
   }
 
-  openSettings() {
-    this.settingsModal.open(this.settingsTab || "models");
+  async openSettings() {
+    await this.ready;
+    this.settingsModal?.open(this.settingsTab || "models");
   }
 
   closeSettings() {
@@ -1456,5 +1523,82 @@ export class ChatUI {
     } catch (e) {
       console.error("[ComfyMate] Failed to save config:", e);
     }
+  }
+
+  _runDoctorCheck() {
+    Toast.info(this.t("doctorChecking") || "正在体检画布工作流...");
+    const report = this.actions.diagnoseWorkflow();
+
+    const messagesContainer = this.panel.querySelector("#cm-messages");
+    const msgDiv = document.createElement("div");
+    msgDiv.className = "comfymate-message assistant";
+
+    let contentHtml = "";
+    if (report.healthy) {
+      contentHtml = `
+        <div class="cm-doctor-card healthy">
+          <div class="cm-doctor-header">
+            <span class="cm-doctor-icon">🎉</span>
+            <div class="cm-doctor-title-group">
+              <div class="cm-doctor-title">${this.t("workflowDoctor") || "工作流健康体检"}</div>
+              <div class="cm-doctor-subtitle">${this.t("wfNodes", { n: report.totalNodes })}</div>
+            </div>
+          </div>
+          <div class="cm-doctor-body">
+            <div class="cm-doctor-success-text">${this.t("doctorHealthy") || "工作流健康状况良好！所有核心连线与参数均正常。"}</div>
+          </div>
+        </div>
+      `;
+    } else {
+      const issueItems = report.issues.map((iss) => {
+        const icon = iss.severity === "critical" ? "🚨" : iss.severity === "warning" ? "⚠️" : "ℹ️";
+        const badgeClass = `cm-doctor-badge ${iss.severity}`;
+        return `
+          <div class="cm-doctor-issue-item">
+            <div class="cm-doctor-issue-top">
+              <span class="${badgeClass}">${icon} Node #${iss.nodeId} [${escapeHtml(iss.title)}]</span>
+              <button class="cm-action-btn-locate cm-doctor-locate" type="button" data-node-id="${iss.nodeId}" title="${this.t("locateNode") || "在画布中定位此节点"}">
+                <span>📍</span> <span>${this.t("locateNode") || "定位"}</span>
+              </button>
+            </div>
+            <div class="cm-doctor-issue-msg">${escapeHtml(iss.message)}</div>
+            ${iss.fixSuggestion ? `<div class="cm-doctor-issue-fix">💡 ${escapeHtml(iss.fixSuggestion)}</div>` : ""}
+          </div>
+        `;
+      }).join("");
+
+      contentHtml = `
+        <div class="cm-doctor-card">
+          <div class="cm-doctor-header">
+            <span class="cm-doctor-icon">🩺</span>
+            <div class="cm-doctor-title-group">
+              <div class="cm-doctor-title">${this.t("workflowDoctor") || "工作流健康体检报告"}</div>
+              <div class="cm-doctor-subtitle">${this.t("doctorFoundIssues", { n: report.issues.length })} (${this.t("wfNodes", { n: report.totalNodes })})</div>
+            </div>
+          </div>
+          <div class="cm-doctor-body">
+            <div class="cm-doctor-issues-list">${issueItems}</div>
+          </div>
+          <div class="cm-doctor-footer">
+            <button class="cm-doctor-btn-ask-ai" type="button">
+              <span>🤖</span> <span>${this.t("doctorAskAi") || "让 AI 提供修复方案"}</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    msgDiv.innerHTML = contentHtml;
+    messagesContainer.appendChild(msgDiv);
+    this._scrollToBottom();
+
+    // Persist to session history
+    this.messages.push({
+      role: "assistant",
+      content: report.healthy
+        ? `🩺 **工作流健康体检**：全部 ${report.totalNodes} 个节点检查通过，核心连线正常。`
+        : `🩺 **工作流健康体检报告**：共扫描 ${report.totalNodes} 个节点，发现 ${report.issues.length} 个潜在问题。`,
+    });
+    this._saveCurrentSession();
   }
 }

@@ -56,19 +56,24 @@ ComfyMate/
 │       │   └── en.js               # 英文字典
 │       │
 │       ├── utils/                  # 通用工具
-│       │   └── markdown.js         # 轻量级 Markdown 语法与代码块渲染器
+│       │   ├── markdown.js         # 轻量级 Markdown 语法、节点徽标与 Action 卡片渲染器
+│       │   ├── template_loader.js  # HTML 视图模板异步加载与 i18n 编译引擎
+│       │   └── toast.js            # 全局轻量通知组件
 │       │
 │       ├── services/               # 核心网络与通信服务
 │       │   └── api.js              # 后端 HTTP API 封装 (配置读写/连通测试/流式对话)
 │       │
 │       ├── canvas/                 # 画布交互与感知
-│       │   └── extractor.js        # LiteGraph 拓扑抽取与报错监听
+│       │   ├── extractor.js        # LiteGraph 拓扑抽取与报错监听
+│       │   └── actions.js          # 画布双向联动 (节点镜头直达、参数写入/撤回、工作流体检)
 │       │
-│       └── components/             # UI 视图组件
-│           ├── settings/           # 设置中心模态弹窗
-│           │   ├── models_pane.js  # 模型提供商列表与精简 3 格式卡片编辑
-│           │   └── general_pane.js # 语言、温度与最大 Token 配置
-│           └── settings_modal.js   # 设置对话框外壳管理
+│       └── components/             # UI 视图组件与独立模板
+│           ├── panel.html          # 侧边栏主面板 HTML 模板
+│           ├── settings_modal.html # 设置中心模态弹窗 HTML 模板
+│           ├── settings_modal.js   # 设置对话框外壳管理
+│           └── settings/           # 设置面板子模块
+│               ├── models_pane.js  # 模型提供商列表与配置卡片
+│               └── general_pane.js # 语言、温度与最大 Token 配置
 │
 └── tests/                          # 测试套件
     ├── test_context.py             # 画布拓扑与提示词装配测试

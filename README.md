@@ -14,8 +14,11 @@ Most AI chat plugins simply open a detached LLM window where you have to manuall
 **ComfyMate is different.** It is deeply integrated into the ComfyUI canvas:
 - 🧠 **Canvas Topology Awareness**: Automatically parses nodes, parameter values, and connection links into an ultra-compact representation.
 - 🎯 **Selected Node Focus**: Click any node on the canvas, and ComfyMate immediately isolates its inputs, outputs, and parameters.
+- 🔍 **Click-to-Locate & Visual Pulsing**: Click interactive node badges (`Node #3 [KSampler]`) in chat to automatically pan, center, and highlight the node on canvas with a pulsing blue outline.
+- ⚡ **One-Click Parameter Apply & Undo**: AI-recommended parameters are rendered as interactive action cards. Apply changes to LiteGraph widgets with a single click, with instant rollback support.
+- 🩺 **Workflow Doctor**: Pre-run static graph health check detecting disconnected inputs, unlinked VAE/CLIP ports, invalid dimensions, empty prompts, and orphan nodes.
 - 🖼️ **Multimodal Vision Chat**: Paste images directly from clipboard (`Cmd+V` / `Ctrl+V`) or drag & drop screenshots to ask AI about generated results, error popups, or node setups.
-- 💾 **Local-Disk Session Management**: Conversations and attachments automatically persist as structured JSON files on your local drive (`storage/sessions/`). Switch between multiple chats via `🕒 History` or start a new conversation with `➕ New Chat` without browser localStorage limits.
+- 💾 **Update-Safe Persistent Storage**: Configurations, conversations, and attachments automatically persist in ComfyUI's standard user directory (`ComfyUI/user/default/comfymate/`), completely immune to updates, re-clones, or registry reinstalls.
 - 🚨 **One-Click Error Diagnostics**: Automatically intercepts ComfyUI execution errors and stack traces, pinpointing missing models, dimension mismatches, or invalid parameters.
 - 🏠 **Local-First & Private**: First-class support for local LLM engines like **Ollama** and **LM Studio**. Your workflow data and prompts never have to leave your machine.
 - ⚡ **Multi-Provider Cloud Support**: Native support for **OpenAI**, **Anthropic Claude**, **DeepSeek**, **OpenRouter**, **SiliconFlow**, and any OpenAI-compatible API.
@@ -142,8 +145,26 @@ Got an artifact in your output image or an error popup?
 2. Paste directly into the ComfyMate prompt box (<kbd>Cmd+V</kbd> / <kbd>Ctrl+V</kbd>) or drag and drop image files.
 3. An image preview card will appear right above the input box (supports up to 4 images).
 4. Ask vision-capable models (e.g., `gpt-4o`, `claude-3-7-sonnet`, or local vision models):
-   - *"The hands in this generated image look deformed. Based on my workflow, what negative prompt or inpaint node should I use to fix it?"*
-   - *"Is this node parameter configuration optimal for SDXL?"*
+    - *"The hands in this generated image look deformed. Based on my workflow, what negative prompt or inpaint node should I use to fix it?"*
+    - *"Is this node parameter configuration optimal for SDXL?"*
+
+#### Scenario F: Pre-Run Workflow Health Check (Workflow Doctor)
+Before spending time rendering or waiting for long queues:
+1. Click the **`🩺 Workflow Doctor`** quick pill (or ask: *"Check my workflow for any issues"*).
+2. ComfyMate statically analyzes graph links, node configurations, and prompt inputs.
+3. Instantly spots common hidden bugs:
+   - Disconnected KSampler inputs (missing Model, Positive, Negative, or Latent).
+   - Unlinked VAE or CLIP connections.
+   - Empty positive or negative text prompts.
+   - Non-standard latent dimensions (dimensions not divisible by 8 or 64).
+   - Floating orphan nodes cluttering the canvas.
+4. Generates an organized health report with actionable recommendations to fix each issue.
+
+#### Scenario G: Click-to-Locate Nodes & One-Click Parameter Apply
+Interact bidirectionally with your canvas through AI responses:
+1. **Click-to-Locate**: Whenever ComfyMate mentions a node (e.g. `Node #3 [KSampler]`), click the blue node badge in the chat bubble. The canvas camera instantly pans, centers, and triggers a pulsing blue outline on that exact node.
+2. **One-Click Parameter Apply**: When ComfyMate suggests parameter optimizations (e.g., adjusting `cfg: 7.0`, `steps: 25`, or `denoise: 0.65`), an interactive action card appears. Click **`⚡ Apply Changes`** to write the parameters directly into the node's widgets on canvas.
+3. **Safe Rollback**: Changed your mind? Click **`↩️ Undo`** on the action card to instantly restore the previous parameter values.
 
 ---
 
@@ -174,20 +195,25 @@ In the **⚙️ Settings &rarr; General** tab, you can customize:
 
 ## 🛣️ Roadmap
 
-- [x] **v0.1.0 (Current)**:
-  - Canvas topology extraction & compression
+- [x] **v0.1.0 (Core Diagnostics & Multimodal)**:
+  - Canvas topology extraction & token-efficient compression
   - Selected node context focus & canvas context menu
   - Real-time execution error capture & auto-diagnosis
   - Multi-provider support (Ollama, DeepSeek, OpenAI, Anthropic, OpenRouter)
-  - Quick model switcher in chat bar
+  - Multimodal clipboard & screenshot vision chat
   - Draggable panel resizer & global shortcuts
-- [ ] **v0.2.0 (Knowledge & RAG)**:
+- [x] **v0.2.0 (Canvas Interaction & Diagnostics)**:
+  - 🎯 Click-to-locate node with canvas centering & pulsing visual highlight
+  - ⚡ One-click parameter recommendation & apply with undo rollback
+  - 🩺 Workflow Doctor: Pre-run static graph health check & missing link detection
+  - 💾 Update-safe persistent storage under ComfyUI user directory (`user/default/comfymate/`)
+  - 🧩 Component-based HTML template separation & dynamic i18n compilation
+- [ ] **v0.3.0 (Knowledge & RAG)**:
   - Built-in documentation indexing for core ComfyUI nodes & popular custom nodes
-  - Community node library lookup
-- [ ] **v0.3.0 (Interactive Canvas Operations)**:
+  - Community node library lookup & recommended templates
+- [ ] **v0.4.0 (Autonomous Workflow Agent)**:
   - AI-assisted node placement, parameter adjustment, and auto-wiring
   - One-click workflow layout tidying & sub-graph optimization
-- [ ] **v0.4.0 (Autonomous Workflow Agent)**:
   - Closed-loop generation, multimodal output evaluation, and iterative parameter tuning
 
 ---

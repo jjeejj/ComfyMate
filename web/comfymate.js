@@ -64,6 +64,7 @@ app.registerExtension({
     // 2. Initialize Chat UI
     const chatUI = new ChatUI(app);
     window.__comfymate_instance = chatUI;
+    await chatUI.ready;
 
     // 3. Right-edge sleek drawer handle (Always visible, clean and non-intrusive)
     const addEdgeDrawerHandle = () => {
