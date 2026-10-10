@@ -15,14 +15,38 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("ComfyMate")
 
-SESSIONS_DIR = Path(__file__).resolve().parent.parent / "storage" / "sessions"
+def get_sessions_dir() -> Path:
+    """Return persistent sessions directory.
+    Uses ComfyUI's user directory if available, so sessions survive node updates.
+    """
+    local_dir = Path(__file__).resolve().parent.parent / "storage" / "sessions"
+    try:
+        import folder_paths
+        user_dir = Path(folder_paths.get_user_directory())
+        target = user_dir / "comfymate" / "sessions"
+        target.mkdir(parents=True, exist_ok=True)
+        if local_dir.is_dir() and not any(target.glob("*.json")):
+            for p in local_dir.glob("*.json"):
+                try:
+                    import shutil
+                    shutil.copy2(p, target / p.name)
+                except Exception:
+                    pass
+        return target
+    except Exception:
+        local_dir.mkdir(parents=True, exist_ok=True)
+        return local_dir
+
+
+SESSIONS_DIR = get_sessions_dir()
 MAX_SESSION_MESSAGES = 1000
 
 
 def ensure_sessions_dir() -> Path:
-    """Ensure storage/sessions directory exists."""
-    SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
-    return SESSIONS_DIR
+    """Ensure sessions directory exists."""
+    d = get_sessions_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def sanitize_session_id(session_id: str) -> Optional[str]:

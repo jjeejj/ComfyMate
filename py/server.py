@@ -24,7 +24,24 @@ from .sessions import (
 
 logger = logging.getLogger("ComfyMate")
 
-ATTACHMENTS_DIR = Path(__file__).resolve().parent.parent / "storage" / "attachments"
+
+def get_attachments_dir() -> Path:
+    """Return persistent attachments directory.
+    Uses ComfyUI's user directory if available, so attachments survive node updates.
+    """
+    local_dir = Path(__file__).resolve().parent.parent / "storage" / "attachments"
+    try:
+        import folder_paths
+        user_dir = Path(folder_paths.get_user_directory())
+        target = user_dir / "comfymate" / "attachments"
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+    except Exception:
+        local_dir.mkdir(parents=True, exist_ok=True)
+        return local_dir
+
+
+ATTACHMENTS_DIR = get_attachments_dir()
 MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB limit
 
 # Try to get ComfyUI's PromptServer instance

@@ -8,7 +8,32 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("ComfyMate")
 
-CONFIG_FILE = Path(__file__).resolve().parent.parent / "config.json"
+def get_config_file() -> Path:
+    """Return persistent config file path.
+    Prioritizes ComfyUI's user directory (ComfyUI/user/default/comfymate/config.json)
+    so user configs survive custom node updates and reinstalls.
+    Automatically migrates legacy local custom_nodes/comfymate/config.json if present.
+    """
+    local_config = Path(__file__).resolve().parent.parent / "config.json"
+    try:
+        import folder_paths
+        user_dir = Path(folder_paths.get_user_directory())
+        target_dir = user_dir / "comfymate"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        user_config = target_dir / "config.json"
+        if not user_config.exists() and local_config.exists():
+            try:
+                import shutil
+                shutil.copy2(local_config, user_config)
+                logger.info(f"Successfully migrated ComfyMate config to user directory: {user_config}")
+            except Exception as e:
+                logger.warning(f"Failed to copy local config to user dir: {e}")
+        return user_config
+    except Exception:
+        return local_config
+
+
+CONFIG_FILE = get_config_file()
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "active_provider_id": None,
@@ -56,15 +81,16 @@ def _clean_config(data: Any) -> Dict[str, Any]:
 
 
 def load_config() -> Dict[str, Any]:
-    """Load config from local config.json."""
-    if not CONFIG_FILE.exists():
+    """Load config from persistent config.json."""
+    config_path = get_config_file()
+    if not config_path.exists():
         return dict(DEFAULT_CONFIG)
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             saved = json.load(f)
             return _clean_config(saved)
     except Exception as e:
-        logger.warning(f"Error loading config: {e}, using default config.")
+        logger.warning(f"Error loading config from {config_path}: {e}, using default config.")
         return dict(DEFAULT_CONFIG)
 
 
@@ -143,10 +169,11 @@ def save_config(new_config: Dict[str, Any]) -> Dict[str, Any]:
         current["providers"] = updated_providers
 
     clean_cfg = _clean_config(current)
+    target_file = get_config_file()
     try:
-        _atomic_write_json(CONFIG_FILE, clean_cfg)
+        _atomic_write_json(target_file, clean_cfg)
     except Exception as e:
-        logger.error(f"Error saving config: {e}")
+        logger.error(f"Error saving config to {target_file}: {e}")
         raise e
     return clean_cfg
 
