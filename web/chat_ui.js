@@ -32,6 +32,15 @@ export class ChatUI {
     // Asynchronous DOM & component initialization
     this.panel = null;
     this.settingsModal = null;
+
+    // Fast-path: preload cached config from localStorage to prevent blank states on refresh
+    try {
+      const cached = localStorage.getItem("comfymate_config_cache");
+      if (cached) {
+        this.config = JSON.parse(cached);
+      }
+    } catch (_) {}
+
     this.ready = this._init();
   }
 
@@ -102,6 +111,9 @@ export class ChatUI {
     document.body.appendChild(this.panel);
 
     this._updateStaticUIText();
+    if (this.config) {
+      this._renderModelSelector();
+    }
     this._bindEvents();
     this._bindResizer();
   }
@@ -292,6 +304,12 @@ export class ChatUI {
 
 
     const activeModelSelect = this.panel.querySelector("#cm-active-model-select");
+    activeModelSelect.addEventListener("mousedown", () => {
+      if (activeModelSelect.options.length <= 1 && this.config) {
+        this._renderModelSelector();
+      }
+    });
+
     activeModelSelect.addEventListener("change", (e) => {
       const val = e.target.value;
       if (!val) {
@@ -304,6 +322,9 @@ export class ChatUI {
         const model = val.substring(sepIdx + 2);
         this.config.active_provider_id = pid;
         this.config.active_model = model;
+        try {
+          localStorage.setItem("comfymate_config_cache", JSON.stringify(this.config));
+        } catch (_) {}
         ApiClient.saveConfig({
           active_provider_id: pid,
           active_model: model,
@@ -542,6 +563,11 @@ export class ChatUI {
     this.isVisible = forceState !== undefined ? forceState : !this.isVisible;
     if (this.isVisible) {
       this.panel.classList.remove("hidden");
+      if (!this.config) {
+        this._loadConfig();
+      } else {
+        this._renderModelSelector();
+      }
       this.panel.querySelector("#cm-input")?.focus();
     } else {
       this.panel.classList.add("hidden");
@@ -1334,21 +1360,24 @@ export class ChatUI {
   /* ---------------- Multi-Provider & Model Selector ---------------- */
 
   _isProviderConfigured(p) {
-    if (!p || !p.base_url) return false;
+    if (!p) return false;
+    const baseUrl = (p.base_url || "").trim();
     let isLocal = false;
-    try {
-      const url = new URL(p.base_url.startsWith("http") ? p.base_url : `http://${p.base_url}`);
-      const host = url.hostname;
-      isLocal =
-        host === "localhost" ||
-        host === "127.0.0.1" ||
-        host === "0.0.0.0" ||
-        host.startsWith("192.168.") ||
-        host.startsWith("10.") ||
-        host.endsWith(".local") ||
-        host.endsWith(".lan");
-    } catch (_) {
-      isLocal = p.base_url.includes("localhost") || p.base_url.includes("127.0.0.1");
+    if (baseUrl) {
+      try {
+        const url = new URL(baseUrl.startsWith("http") ? baseUrl : `http://${baseUrl}`);
+        const host = url.hostname;
+        isLocal =
+          host === "localhost" ||
+          host === "127.0.0.1" ||
+          host === "0.0.0.0" ||
+          host.startsWith("192.168.") ||
+          host.startsWith("10.") ||
+          host.endsWith(".local") ||
+          host.endsWith(".lan");
+      } catch (_) {
+        isLocal = baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1");
+      }
     }
     if (isLocal) {
       return Boolean(p.enabled !== false);
@@ -1375,15 +1404,13 @@ export class ChatUI {
       opt.selected = true;
       selector.appendChild(opt);
       selector.value = "";
+      selector.selectedIndex = 0;
       return;
     }
 
-    const targetVal = (this.config?.active_provider_id && this.config?.active_model)
+    let targetVal = (this.config?.active_provider_id && this.config?.active_model)
       ? `${this.config.active_provider_id}::${this.config.active_model}`
       : "";
-
-    let firstOptionVal = "";
-    let matchedOption = null;
 
     for (const p of configuredProviders) {
       const optgroup = document.createElement("optgroup");
@@ -1395,37 +1422,50 @@ export class ChatUI {
         const val = `${p.id}::${m}`;
         opt.value = val;
         opt.textContent = `${p.name || 'Provider'}: ${m}`;
-
-        if (!firstOptionVal) {
-          firstOptionVal = val;
-        }
-
-        if (targetVal && val === targetVal) {
-          matchedOption = opt;
-          opt.selected = true;
-          opt.defaultSelected = true;
-        }
-
         optgroup.appendChild(opt);
       }
       selector.appendChild(optgroup);
     }
 
-    // Explicitly set selector.value and ensure selection is synced with DOM
-    if (matchedOption) {
-      selector.value = targetVal;
-    } else if (firstOptionVal) {
-      selector.value = firstOptionVal;
-      const sep = firstOptionVal.indexOf("::");
-      const pid = firstOptionVal.substring(0, sep);
-      const model = firstOptionVal.substring(sep + 2);
-      this.config.active_provider_id = pid;
-      this.config.active_model = model;
-      ApiClient.saveConfig({
-        active_provider_id: pid,
-        active_model: model,
-      }).catch((err) => console.warn("[ComfyMate] Failed to auto-save active model:", err));
+    // Bulletproof selection sync across all WebKit and Chromium browser engines:
+    const allOptions = Array.from(selector.querySelectorAll("option"));
+    if (allOptions.length === 0) return;
+
+    let targetIdx = allOptions.findIndex((o) => o.value && o.value === targetVal);
+    if (targetIdx === -1) {
+      targetIdx = allOptions.findIndex((o) => Boolean(o.value));
+      if (targetIdx === -1) targetIdx = 0;
+      targetVal = allOptions[targetIdx].value;
+
+      if (targetVal) {
+        const sep = targetVal.indexOf("::");
+        if (sep !== -1) {
+          const pid = targetVal.substring(0, sep);
+          const model = targetVal.substring(sep + 2);
+          if (this.config) {
+            this.config.active_provider_id = pid;
+            this.config.active_model = model;
+            try {
+              localStorage.setItem("comfymate_config_cache", JSON.stringify(this.config));
+            } catch (_) {}
+            ApiClient.saveConfig({
+              active_provider_id: pid,
+              active_model: model,
+            }).catch(() => {});
+          }
+        }
+      }
     }
+
+    // Explicitly update DOM state: option.selected, selector.selectedIndex, and selector.value
+    allOptions.forEach((opt, idx) => {
+      const isSelected = (idx === targetIdx);
+      opt.selected = isSelected;
+      opt.defaultSelected = isSelected;
+    });
+
+    selector.selectedIndex = targetIdx;
+    selector.value = targetVal;
   }
 
   async openSettings() {
@@ -1512,24 +1552,37 @@ export class ChatUI {
     }
   }
 
-  async _loadConfig() {
-    try {
-      const data = await ApiClient.getConfig();
-      if (data.status === "ok") {
-        this.config = data.config;
-        this._updateStaticUIText();
-        this._renderModelSelector();
+  async _loadConfig(retries = 2) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const data = await ApiClient.getConfig();
+        if (data && data.status === "ok" && data.config) {
+          this.config = data.config;
+          try {
+            localStorage.setItem("comfymate_config_cache", JSON.stringify(data.config));
+          } catch (_) {}
+          this._updateStaticUIText();
+          this._renderModelSelector();
+          return;
+        }
+      } catch (e) {
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
+        } else {
+          console.warn("[ComfyMate] Could not load settings after retries:", e);
+        }
       }
-    } catch (e) {
-      console.warn("[ComfyMate] Could not load settings:", e);
     }
   }
 
   async _saveConfigToServer() {
     try {
       const res = await ApiClient.saveConfig(this.config);
-      if (res.status === "ok") {
+      if (res && res.status === "ok" && res.config) {
         this.config = res.config;
+        try {
+          localStorage.setItem("comfymate_config_cache", JSON.stringify(res.config));
+        } catch (_) {}
         this._updateStaticUIText();
         this._renderModelSelector();
       }
