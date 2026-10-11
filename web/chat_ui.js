@@ -81,7 +81,7 @@ export class ChatUI {
       },
       saveConfig: () => this._saveConfigToServer(),
       isProviderConfigured: (p) => this._isProviderConfigured(p),
-      testConnection: (id, apiType, url, key, model, models) => this._testConnectionEndpoint(id, apiType, url, key, model, models),
+      testConnection: (id, apiType, url, key, model, models, proxy = "") => this._testConnectionEndpoint(id, apiType, url, key, model, models, proxy),
       apiTestConnection: (params) => ApiClient.testConnection(params),
       updateStaticUIText: () => this._updateStaticUIText(),
       switchSettingsTab: (tab) => this.settingsModal.switchTab(tab),
@@ -345,6 +345,10 @@ export class ChatUI {
 
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
+        // Prevent premature sending during IME composition (e.g. Windows Microsoft Pinyin)
+        if (e.isComposing || e.keyCode === 229) {
+          return;
+        }
         e.preventDefault();
         this.sendMessage();
       }
@@ -407,13 +411,13 @@ export class ChatUI {
         } else if (action === "explain_selected") {
           const selected = this.extractor.getSelectedNodes();
           if (selected.length === 0) {
-            Toast.warning(this.t("selectNodesFirst"));
+            this._appendMessage("assistant", `💡 ${this.t("selectNodesFirst") || "请先在画布上选中要分析的节点。"}`);
             return;
           }
           this.sendMessage(this.t("promptExplainSel"));
         } else if (action === "diagnose_error") {
           if (!this.extractor.lastError) {
-            Toast.info(this.t("noErrorDetected"));
+            this._appendMessage("assistant", `💡 ${this.t("noErrorDetected") || "当前工作流执行正常，未检测到运行报错。"}`);
             return;
           }
           this.sendMessage(this.t("promptDiagnoseErr"));
@@ -496,7 +500,6 @@ export class ChatUI {
           const params = JSON.parse(rawParams);
           const res = this.actions.applyParameters(nodeId, params);
           if (res.success) {
-            Toast.success(this.t("appliedParams", { id: nodeId, name: res.nodeTitle }));
             if (card) {
               const footer = card.querySelector(".cm-action-footer");
               if (footer) {
@@ -529,7 +532,6 @@ export class ChatUI {
           const oldValues = JSON.parse(rawOldVals);
           const res = this.actions.undoParameters(nodeId, oldValues);
           if (res.success) {
-            Toast.info(this.t("undoneParams", { id: nodeId }));
             if (card) {
               const footer = card.querySelector(".cm-action-footer");
               const origParamsJson = card.getAttribute("data-params") || "{}";
@@ -935,10 +937,11 @@ export class ChatUI {
             hasError = true;
             errorMessage = event.text;
             if (typingIndicator.parentNode) typingIndicator.remove();
+            const errTitle = (this.t("errorDetected") || "调用报错").replace(/^[🚨\s]+/u, "");
             contentBox.innerHTML = `
               <div class="cm-chat-error-card" style="padding:10px 14px; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35); border-radius:8px; color:#fca5a5; font-size:12.5px; line-height:1.5;">
                 <div style="font-weight:600; color:#ef4444; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
-                  <span>🚨</span> <span>${this.t("errorDetected") || "调用报错"}</span>
+                  <span>🚨</span> <span>${escapeHtml(errTitle)}</span>
                 </div>
                 <div style="white-space:pre-wrap; word-break:break-word;">${escapeHtml(event.text)}</div>
               </div>
@@ -1239,7 +1242,6 @@ export class ChatUI {
     `;
     this._updateStaticUIText();
     this.extractor.clearError();
-    Toast.info(this.t("newChatCreated") || "已开启新会话");
   }
 
   clearChat() {
@@ -1312,7 +1314,6 @@ export class ChatUI {
           if (id) {
             await this._switchSession(id);
             this._closeSessionsOverlay();
-            Toast.info(this.t("sessionSwitched", { title: card.querySelector(".cm-session-card-title")?.textContent || id }));
           }
         });
       });
@@ -1325,7 +1326,6 @@ export class ChatUI {
           if (confirm(this.t("deleteSessionConfirm") || "确定要删除此会话吗？本地文件也将被清除。")) {
             try {
               await ApiClient.deleteSession(id);
-              Toast.info(this.t("sessionDeleted") || "会话已删除");
               if (id === this.currentSessionId) {
                 this._createNewSession();
               }
@@ -1480,7 +1480,7 @@ export class ChatUI {
     this._renderModelSelector();
   }
 
-  async _testConnectionEndpoint(providerId, apiType, baseUrl, apiKey, model = null, models = []) {
+  async _testConnectionEndpoint(providerId, apiType, baseUrl, apiKey, model = null, models = [], proxy = "") {
     try {
       const data = await ApiClient.testConnection({
         id: providerId,
@@ -1489,6 +1489,7 @@ export class ChatUI {
         api_key: apiKey,
         model,
         models,
+        proxy,
       });
       if (data.status === "ok") {
         let detailsHtml = "";
@@ -1592,7 +1593,6 @@ export class ChatUI {
   }
 
   _runDoctorCheck() {
-    Toast.info(this.t("doctorChecking") || "正在体检画布工作流...");
     const report = this.actions.diagnoseWorkflow();
 
     const messagesContainer = this.panel.querySelector("#cm-messages");

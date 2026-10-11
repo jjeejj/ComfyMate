@@ -109,9 +109,12 @@ export function renderGeneralPane(ctx, container) {
             <span>${ctx.t("footerShortcut")}</span>
           </span>
         </div>
-        <button class="comfymate-send-btn cm-btn-save-primary" id="cm-btn-save-general">
-          ${ctx.t("save")}
-        </button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="cm-tag-badge" id="cm-saved-general-badge" style="display:none; background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3); font-weight:600;">✓ ${ctx.t("saved") || "已保存"}</span>
+          <button class="comfymate-send-btn cm-btn-save-primary" id="cm-btn-save-general">
+            ${ctx.t("save")}
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -132,9 +135,13 @@ export function renderGeneralPane(ctx, container) {
     ctx.config.max_tokens = parseInt(maxTokensSelect.value, 10);
     ctx.saveConfig();
     ctx.updateStaticUIText();
-    ctx.switchSettingsTab("general");
-    if (ctx.toast) {
-      ctx.toast.success(ctx.t("generalSaved"));
+
+    const savedBadge = container.querySelector("#cm-saved-general-badge");
+    if (savedBadge) {
+      savedBadge.style.display = "inline";
+      setTimeout(() => {
+        if (savedBadge) savedBadge.style.display = "none";
+      }, 2500);
     }
   });
 }

@@ -61,10 +61,11 @@ class OpenAIProvider(BaseLLMProvider):
         }
 
         timeout = aiohttp.ClientTimeout(total=180)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        proxy = self.get_proxy()
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
             try:
                 async with session.post(
-                    url, json=payload, headers=self._get_headers()
+                    url, json=payload, headers=self._get_headers(), proxy=proxy
                 ) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
@@ -120,9 +121,10 @@ class OpenAIProvider(BaseLLMProvider):
                                 except json.JSONDecodeError:
                                     continue
             except aiohttp.ClientConnectorError as e:
+                proxy_hint = f"\n(检测到代理: {proxy})" if proxy else "\n(未检测到代理。若访问海外服务，请开启系统代理或在终端设置 HTTP_PROXY/HTTPS_PROXY)"
                 yield {
                     "type": "error",
-                    "text": f"无法连接到模型服务 ({self.base_url})。请检查本地模型服务或代理是否已启动。\n详情: {e}",
+                    "text": f"无法连接到模型服务 ({self.base_url})。请检查本地模型服务或代理是否已启动。\n详情: {e}{proxy_hint}",
                 }
             except Exception as e:
                 logger.error(f"OpenAI stream error: {e}", exc_info=True)
@@ -132,10 +134,11 @@ class OpenAIProvider(BaseLLMProvider):
         if aiohttp is None:
             raise RuntimeError("aiohttp library is required to fetch models.")
         url = f"{self.base_url}/models"
-        timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        timeout = aiohttp.ClientTimeout(total=15)
+        proxy = self.get_proxy()
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
             try:
-                async with session.get(url, headers=self._get_headers()) as resp:
+                async with session.get(url, headers=self._get_headers(), proxy=proxy) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         model_list = data.get("data", [])

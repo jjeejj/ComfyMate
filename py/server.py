@@ -3,8 +3,9 @@ import base64
 import json
 import logging
 import os
+import re
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Optional
 
 try:
@@ -123,6 +124,7 @@ async def handle_test_connection(request: web.Request) -> web.Response:
         base_url = data.get("base_url", "").strip()
         api_key = data.get("api_key", "").strip()
         api_type = data.get("api_type", "").strip()
+        proxy = data.get("proxy", "").strip() if data.get("proxy") is not None else ""
         fetch_models_only = bool(data.get("fetch_models_only", False))
 
         # Model to test
@@ -133,12 +135,15 @@ async def handle_test_connection(request: web.Request) -> web.Response:
                 model = str(models[0]).strip()
 
         # If test request didn't supply key or sent masked, find in saved config
-        if not api_key or "..." in api_key or "********" in api_key:
+        if not api_key or "..." in api_key or "********" in api_key or not proxy:
             provider_id = data.get("id")
             cfg = load_config()
             for p in cfg.get("providers", []):
                 if p.get("id") == provider_id or p.get("base_url") == base_url:
-                    api_key = p.get("api_key", "")
+                    if not api_key or "..." in api_key or "********" in api_key:
+                        api_key = p.get("api_key", "")
+                    if not proxy:
+                        proxy = str(p.get("proxy", "")).strip()
                     if not api_type:
                         api_type = p.get("api_type", "")
                     if not model and p.get("models"):
@@ -153,6 +158,7 @@ async def handle_test_connection(request: web.Request) -> web.Response:
             "api_key": api_key,
             "api_type": api_type,
             "model": model,
+            "proxy": proxy,
             "max_tokens": 5,
         })
 
@@ -226,7 +232,7 @@ async def handle_test_connection(request: web.Request) -> web.Response:
 def resolve_attachment_to_base64(img_ref: str) -> str:
     """If img_ref is a local attachment URL (/comfymate/api/attachment/xxx), read it from disk and return data URL."""
     if isinstance(img_ref, str) and img_ref.startswith("/comfymate/api/attachment/"):
-        filename = Path(img_ref).name
+        filename = PurePosixPath(img_ref).name
         file_path = get_attachments_dir() / filename
         if not file_path.is_file():
             legacy_file = Path(__file__).resolve().parent.parent / "storage" / "attachments" / filename
@@ -299,8 +305,14 @@ async def handle_upload_attachment(request: web.Request) -> web.Response:
 
         attachments_dir = get_attachments_dir()
         attachments_dir.mkdir(parents=True, exist_ok=True)
-        safe_stem = Path(orig_name).stem.replace(" ", "_")[:30]
-        if not safe_stem:
+        raw_stem = Path(orig_name).stem
+        safe_stem = re.sub(r'[\\/*?:"<>|\s]+', '_', raw_stem)[:30].strip("._ ")
+        win_reserved = {
+            "CON", "PRN", "AUX", "NUL",
+            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+        }
+        if not safe_stem or safe_stem.upper() in win_reserved:
             safe_stem = "image"
 
         unique_id = uuid.uuid4().hex[:10]
@@ -326,7 +338,9 @@ async def handle_get_attachment(request: web.Request) -> web.Response:
     """Serve a locally stored attachment using streaming FileResponse."""
     try:
         filename = request.match_info.get("filename", "")
-        safe_filename = Path(filename).name
+        safe_filename = PurePosixPath(filename).name
+        # Prevent path traversal across Windows and POSIX
+        safe_filename = re.sub(r'[\\/]', '', safe_filename)
         file_path = get_attachments_dir() / safe_filename
 
         if not file_path.is_file():
@@ -370,6 +384,7 @@ async def handle_chat(request: web.Request) -> web.StreamResponse:
                             "api_type": p.get("api_type", "openai"),
                             "base_url": p.get("base_url"),
                             "api_key": p.get("api_key", ""),
+                            "proxy": str(p.get("proxy", "")).strip(),
                             "model": model_override.get("model") or (p.get("models") and p["models"][0]) or "default",
                             "temperature": p.get("temperature", 0.7),
                             "max_tokens": p.get("max_tokens", 4096),

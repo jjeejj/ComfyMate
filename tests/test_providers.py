@@ -123,7 +123,43 @@ def test_multimodal_formatting():
     print("✅ Multimodal Vision formatting test passed!")
 
 
+def test_proxy_routing():
+    # 1. Local URLs should never use proxy
+    p_local1 = OpenAIProvider({"name": "Ollama", "base_url": "http://localhost:11434/v1"})
+    assert p_local1.is_local_url() is True
+    assert p_local1.get_proxy() is None
+
+    p_local2 = OpenAIProvider({"name": "LMStudio", "base_url": "http://127.0.0.1:1234/v1"})
+    assert p_local2.is_local_url() is True
+    assert p_local2.get_proxy() is None
+
+    # 2. Remote URL with explicit proxy config (including auto-prefixing http://)
+    p_custom = OpenAIProvider({
+        "name": "Custom",
+        "base_url": "https://api.openai.com/v1",
+        "proxy": "127.0.0.1:7890",  # Test without scheme prefix
+    })
+    assert p_custom.is_local_url() is False
+    assert p_custom.get_proxy() == "http://127.0.0.1:7890"
+
+    # 3. Remote URL with env variable (test with and without scheme)
+    old_proxy = os.environ.get("https_proxy")
+    try:
+        os.environ["https_proxy"] = "127.0.0.1:9999"
+        p_remote = OpenAIProvider({"name": "OpenRouter", "base_url": "https://openrouter.ai/api/v1"})
+        assert p_remote.is_local_url() is False
+        assert p_remote.get_proxy() == "http://127.0.0.1:9999"
+    finally:
+        if old_proxy is not None:
+            os.environ["https_proxy"] = old_proxy
+        else:
+            os.environ.pop("https_proxy", None)
+
+    print("✅ Proxy routing & local bypass test passed!")
+
+
 if __name__ == "__main__":
     test_provider_factory()
     test_multimodal_formatting()
+    test_proxy_routing()
 

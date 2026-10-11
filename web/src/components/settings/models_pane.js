@@ -56,9 +56,6 @@ export function renderModelsPane(ctx, container) {
         ctx.config.active_provider_id = p.id;
         ctx.config.active_model = p.models?.[0] || "default";
         ctx.saveConfig();
-        if (ctx.toast) {
-          ctx.toast.success(ctx.t("activeSetSuccess", { name: displayName }) || `已切换当前服务商为 ${displayName}`);
-        }
         renderModelsPane(ctx, container);
       });
     }
@@ -193,6 +190,21 @@ export function renderModelsPane(ctx, container) {
           />
         </div>
 
+        <!-- 3.1 Network Proxy (Optional) -->
+        <div class="comfymate-setting-group">
+          <label class="comfymate-setting-label">${ctx.t("proxyUrl") || "网络代理 (可选)"}</label>
+          <input
+            type="text"
+            class="comfymate-input"
+            id="cm-edit-proxy"
+            value="${targetP.proxy || ''}"
+            placeholder="${ctx.t("proxyPlaceholder") || "如 http://127.0.0.1:7890 (留空则自动检测系统代理)"}"
+            autocomplete="off"
+            spellcheck="false"
+            style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;"
+          />
+        </div>
+
         <!-- 4. Available Models Manager (Visual Tags & Quick Add) -->
         <div class="comfymate-setting-group">
           <div class="cm-model-manager-card">
@@ -240,6 +252,7 @@ export function renderModelsPane(ctx, container) {
       const customNameInput = formCard.querySelector("#cm-edit-custom-name");
       const urlInput = formCard.querySelector("#cm-edit-url");
       const keyInput = formCard.querySelector("#cm-edit-key");
+      const proxyInput = formCard.querySelector("#cm-edit-proxy");
 
       const chipsContainer = formCard.querySelector("#cm-model-chips");
       const countBadge = formCard.querySelector("#cm-model-count");
@@ -320,6 +333,7 @@ export function renderModelsPane(ctx, container) {
       btnAddModel.addEventListener("click", addModelFromInput);
       inputNewModel.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
+          if (e.isComposing || e.keyCode === 229) return;
           e.preventDefault();
           addModelFromInput();
         }
@@ -408,8 +422,9 @@ export function renderModelsPane(ctx, container) {
         testBtn.disabled = true;
         const apiType = presetSelect.value === "anthropic" ? "anthropic" : "openai";
         const modelToTest = selectedModel || currentModels[0] || inputNewModel.value.trim() || "";
+        const proxyVal = proxyInput ? proxyInput.value.trim() : (targetP.proxy || "");
         try {
-          await ctx.testConnection(targetP.id, apiType, urlInput.value.trim(), keyInput.value.trim(), modelToTest, currentModels);
+          await ctx.testConnection(targetP.id, apiType, urlInput.value.trim(), keyInput.value.trim(), modelToTest, currentModels, proxyVal);
         } finally {
           testBtn.textContent = origText;
           testBtn.disabled = false;
@@ -423,12 +438,14 @@ export function renderModelsPane(ctx, container) {
         fetchBtn.textContent = "⏳...";
         fetchBtn.disabled = true;
         const apiType = presetSelect.value === "anthropic" ? "anthropic" : "openai";
+        const proxyVal = proxyInput ? proxyInput.value.trim() : (targetP.proxy || "");
         try {
           const data = await ctx.apiTestConnection({
             id: targetP.id,
             api_type: apiType,
             base_url: urlInput.value.trim(),
             api_key: keyInput.value.trim(),
+            proxy: proxyVal,
             fetch_models_only: true,
           });
           if (data.status === "ok" && data.models && data.models.length > 0) {
@@ -522,6 +539,7 @@ export function renderModelsPane(ctx, container) {
         targetP.name = newName;
         targetP.base_url = newUrl;
         targetP.api_key = newKey;
+        targetP.proxy = proxyInput ? proxyInput.value.trim() : (targetP.proxy || "");
         targetP.models = [...currentModels];
 
         if (!isCustomMode && !newKey && !targetP.api_key_masked) {

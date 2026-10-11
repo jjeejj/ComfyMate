@@ -95,7 +95,7 @@ def load_config() -> Dict[str, Any]:
 
 
 def _atomic_write_json(file_path: Path, data: Any) -> None:
-    """Safely write JSON to a file atomically via tempfile to prevent race conditions and corruption."""
+    """Safely write JSON to a file atomically via tempfile with Windows file-lock retry resilience."""
     file_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_file = None
     try:
@@ -104,7 +104,23 @@ def _atomic_write_json(file_path: Path, data: Any) -> None:
             json.dump(data, tf, indent=2, ensure_ascii=False)
             tf.flush()
             os.fsync(tf.fileno())
-        os.replace(tmp_file, file_path)
+
+        # Windows anti-virus or search indexers can momentarily hold locks on recently closed temp files
+        for attempt in range(5):
+            try:
+                os.replace(tmp_file, file_path)
+                break
+            except (PermissionError, OSError) as pe:
+                if attempt == 4:
+                    import shutil
+                    shutil.copy2(tmp_file, file_path)
+                    try:
+                        tmp_file.unlink()
+                    except OSError:
+                        pass
+                    break
+                import time
+                time.sleep(0.04 * (attempt + 1))
     except Exception as e:
         if tmp_file and tmp_file.exists():
             try:
@@ -161,6 +177,7 @@ def save_config(new_config: Dict[str, Any]) -> Dict[str, Any]:
                 "api_type": api_type,
                 "base_url": p.get("base_url", "http://localhost:11434/v1").rstrip("/"),
                 "api_key": api_key,
+                "proxy": str(p.get("proxy") if p.get("proxy") is not None else old_p.get("proxy", "")).strip(),
                 "models": models,
                 "temperature": _safe_float(p.get("temperature"), 0.7),
                 "max_tokens": _safe_int(p.get("max_tokens"), 4096),
@@ -205,6 +222,7 @@ def get_active_provider_and_model(config: Dict[str, Any]) -> Optional[Dict[str, 
         "api_type": provider.get("api_type", "openai"),
         "base_url": provider.get("base_url"),
         "api_key": provider.get("api_key", ""),
+        "proxy": str(provider.get("proxy") or "").strip(),
         "model": active_model or "default",
         "temperature": config.get("temperature", provider.get("temperature", 0.7)),
         "max_tokens": config.get("max_tokens", provider.get("max_tokens", 4096)),

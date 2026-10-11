@@ -22,7 +22,7 @@
   display: flex;
   flex-direction: column;
   z-index: 10000;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
   color: #e4e4e7;
   transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
   overflow: hidden;
@@ -239,13 +239,41 @@
   scroll-behavior: smooth;
 }
 
-.comfymate-messages::-webkit-scrollbar {
-  width: 6px;
+/* Universal sleek scrollbars across Windows, macOS, and Linux */
+.comfymate-panel,
+.comfymate-panel *,
+.comfymate-modal-backdrop,
+.comfymate-modal-backdrop *,
+.cm-sessions-overlay,
+.cm-sessions-overlay * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
-.comfymate-messages::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
+.comfymate-panel *::-webkit-scrollbar,
+.comfymate-modal-backdrop *::-webkit-scrollbar,
+.cm-sessions-overlay *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.comfymate-panel *::-webkit-scrollbar-track,
+.comfymate-modal-backdrop *::-webkit-scrollbar-track,
+.cm-sessions-overlay *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.comfymate-panel *::-webkit-scrollbar-thumb,
+.comfymate-modal-backdrop *::-webkit-scrollbar-thumb,
+.cm-sessions-overlay *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+}
+
+.comfymate-panel *::-webkit-scrollbar-thumb:hover,
+.comfymate-modal-backdrop *::-webkit-scrollbar-thumb:hover,
+.cm-sessions-overlay *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .comfymate-message {
@@ -755,7 +783,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
 }
 
 .comfymate-modal-backdrop.hidden {
