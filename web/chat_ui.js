@@ -501,15 +501,23 @@ export class ChatUI {
       if (copyBtn) {
         const code = decodeURIComponent(copyBtn.getAttribute("data-code") || "");
         if (code) {
-          navigator.clipboard.writeText(code).then(() => {
+          const onCopied = () => {
             const origText = copyBtn.textContent;
             copyBtn.textContent = this.t("copiedCode") || "已复制!";
             setTimeout(() => {
               copyBtn.textContent = origText;
             }, 2000);
-          }).catch((err) => {
-            console.warn("[ComfyMate] Copy failed:", err);
-          });
+          };
+
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+            navigator.clipboard.writeText(code).then(onCopied).catch(() => {
+              this._fallbackCopyText(code);
+              onCopied();
+            });
+          } else {
+            this._fallbackCopyText(code);
+            onCopied();
+          }
         }
         return;
       }
@@ -1743,10 +1751,11 @@ export class ChatUI {
 
         // If session belongs to a different workflow than active, try to switch canvas tab
         if (sessionWfName && (!this.activeWorkflow || this.activeWorkflow.name !== sessionWfName)) {
-          const tabs = document.querySelectorAll('[data-testid="workflow-tab"], .workflow-tab');
+          const tabs = document.querySelectorAll(
+            '.p-togglebutton, [data-testid*="workflow-tab"], .workflow-tab, [role="tab"]'
+          );
           for (const tab of tabs) {
-            const labelEl = tab.querySelector('.workflow-label, [data-testid="workflow-label"], span.truncate, span');
-            const name = this.extractor._cleanWorkflowName(tab.getAttribute('title') || labelEl?.getAttribute('title') || labelEl?.textContent || tab.textContent);
+            const name = this.extractor._extractTabName(tab);
             if (name === sessionWfName) {
               const trigger = tab.querySelector('[role="tab"], button, [data-state]') || tab;
               trigger.click();
@@ -2178,6 +2187,11 @@ export class ChatUI {
     const report = this.actions.diagnoseWorkflow();
 
     const messagesContainer = this.panel.querySelector("#cm-messages");
+    const welcomeMsg = messagesContainer?.querySelector("#cm-welcome-msg");
+    if (welcomeMsg) {
+      welcomeMsg.remove();
+    }
+
     const msgDiv = document.createElement("div");
     msgDiv.className = "comfymate-message assistant";
 
@@ -2248,5 +2262,23 @@ export class ChatUI {
         : `🩺 **工作流健康体检报告**：共扫描 ${report.totalNodes} 个节点，发现 ${report.issues.length} 个潜在问题。`,
     });
     this._saveCurrentSession();
+  }
+
+  _fallbackCopyText(text) {
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      textArea.style.opacity = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+    } catch (e) {
+      console.warn("[ComfyMate] Fallback copy failed:", e);
+    }
   }
 }

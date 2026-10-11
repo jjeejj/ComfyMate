@@ -302,9 +302,43 @@ export class CanvasActionManager {
 
         // Cast value if widget has specific options or type requirements
         let finalVal = rawVal;
-        if (typeof oldVal === "number" && typeof rawVal === "string") {
-          const num = Number(rawVal);
-          if (!isNaN(num)) finalVal = num;
+        if (typeof oldVal === "boolean") {
+          if (typeof rawVal === "string") {
+            finalVal = rawVal.toLowerCase() === "true" || rawVal === "1";
+          } else {
+            finalVal = Boolean(rawVal);
+          }
+        } else if (
+          typeof oldVal === "number" ||
+          widget.type === "number" ||
+          widget.type === "INT" ||
+          widget.type === "FLOAT"
+        ) {
+          let num = Number(rawVal);
+          if (!isNaN(num)) {
+            if (
+              widget.type === "INT" ||
+              (widget.options && Number.isInteger(widget.options.step) && widget.options.step >= 1)
+            ) {
+              num = Math.round(num);
+            }
+            if (widget.options) {
+              if (typeof widget.options.min === "number" && num < widget.options.min) {
+                num = widget.options.min;
+              }
+              if (typeof widget.options.max === "number" && num > widget.options.max) {
+                num = widget.options.max;
+              }
+            }
+            finalVal = num;
+          }
+        } else if (widget.options && Array.isArray(widget.options.values)) {
+          const matchedVal = widget.options.values.find(
+            (opt) => String(opt).trim().toLowerCase() === String(rawVal).trim().toLowerCase()
+          );
+          if (matchedVal !== undefined) {
+            finalVal = matchedVal;
+          }
         }
 
         widget.value = finalVal;

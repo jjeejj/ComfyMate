@@ -3,6 +3,16 @@
  * Supports headings, lists, tables, blockquotes, horizontal rules, inline formatting,
  * and code blocks with copy buttons.
  */
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export function renderMarkdown(text, t = (k) => k) {
   if (!text) return "";
 
@@ -39,8 +49,8 @@ export function renderMarkdown(text, t = (k) => k) {
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    // Markdown Links: [text](url)
-    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a class="cm-link" href="$2" target="_blank" rel="noopener">$1</a>');
+    // Markdown Links: [text](url) - sanitize URL protocols
+    s = s.replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/|#)[^\s)]+)\)/g, '<a class="cm-link" href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 
     // Bold: **text** or __text__
     s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
@@ -232,19 +242,18 @@ export function renderMarkdown(text, t = (k) => k) {
     if (isActionLang || isJsonAction) {
       try {
         const parsed = JSON.parse(item.code);
-        if (parsed && parsed.action === "set_parameters" && parsed.node_id) {
-          const nodeId = parsed.node_id;
-          const params = parsed.parameters || {};
+        const rawNodeId = parseInt(parsed?.node_id, 10);
+        if (parsed && parsed.action === "set_parameters" && !isNaN(rawNodeId)) {
+          const nodeId = rawNodeId;
+          const params = (parsed.parameters && typeof parsed.parameters === "object") ? parsed.parameters : {};
           const reason = parsed.reason || "";
           const paramsJsonStr = encodeURIComponent(JSON.stringify(params));
-          const reasonEsc = reason
-            ? reason.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-            : "";
+          const reasonEsc = escapeHtml(reason);
 
           const paramRows = Object.entries(params)
             .map(([k, v]) => {
-              const kEsc = String(k).replace(/&/g, "&amp;").replace(/</g, "&lt;");
-              const vEsc = String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+              const kEsc = escapeHtml(k);
+              const vEsc = escapeHtml(v);
               return `<div class="cm-action-param-row"><span class="cm-action-param-key">${kEsc}:</span> <span class="cm-action-param-val">${vEsc}</span></div>`;
             })
             .join("");
