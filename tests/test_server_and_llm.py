@@ -175,6 +175,7 @@ def test_session_persistence():
     sess = save_session({
         "id": "test_sess_001",
         "title": "测试文生图工作流",
+        "workflow_name": "video_minimax_h3_i2v",
         "messages": [
             {"role": "user", "content": "帮我看看这个工作流"},
             {"role": "assistant", "content": "好的，这个工作流是标准的SDXL文生图。"},
@@ -182,6 +183,7 @@ def test_session_persistence():
     })
     assert sess["id"] == "test_sess_001"
     assert sess["title"] == "测试文生图工作流"
+    assert sess.get("workflow_name") == "video_minimax_h3_i2v"
     assert len(sess["messages"]) == 2
 
     try:
@@ -190,6 +192,7 @@ def test_session_persistence():
         assert loaded is not None
         assert loaded["id"] == "test_sess_001"
         assert loaded["title"] == "测试文生图工作流"
+        assert loaded.get("workflow_name") == "video_minimax_h3_i2v"
         assert len(loaded["messages"]) == 2
 
         # 4. List sessions
@@ -197,6 +200,7 @@ def test_session_persistence():
         assert any(s["id"] == "test_sess_001" for s in sessions)
         matched = next(s for s in sessions if s["id"] == "test_sess_001")
         assert matched["message_count"] == 2
+        assert matched.get("workflow_name") == "video_minimax_h3_i2v"
 
         # 5. Auto-title derivation when title not provided
         sess2 = save_session({

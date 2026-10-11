@@ -75,6 +75,7 @@ def list_sessions() -> List[Dict[str, Any]]:
             sessions.append({
                 "id": sess_id,
                 "title": data.get("title") or "新会话",
+                "workflow_name": data.get("workflow_name") or "",
                 "created_at": data.get("created_at") or int(file_path.stat().st_ctime * 1000),
                 "updated_at": data.get("updated_at") or int(file_path.stat().st_mtime * 1000),
                 "message_count": len(messages) if isinstance(messages, list) else 0,
@@ -189,9 +190,19 @@ def save_session(data: Dict[str, Any]) -> Dict[str, Any]:
         else:
             created_at = now_ms
 
+    workflow_name = data.get("workflow_name")
+    if not workflow_name and target.is_file():
+        try:
+            with open(target, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+            workflow_name = existing.get("workflow_name", "")
+        except Exception:
+            pass
+
     session_record = {
         "id": safe_id,
         "title": title,
+        "workflow_name": str(workflow_name).strip() if workflow_name else "",
         "created_at": created_at,
         "updated_at": now_ms,
         "messages": messages,

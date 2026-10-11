@@ -49,6 +49,11 @@ def format_context_block(context: Optional[Dict[str, Any]]) -> str:
 
     parts = []
 
+    # 0. Active Workflow Canvas Name
+    workflow_name = context.get("workflow_name")
+    if workflow_name:
+        parts.append(f"### 🎨 Active Canvas Workflow: `{workflow_name}`")
+
     # 1. Error Information
     error_info = context.get("error_info")
     if error_info:

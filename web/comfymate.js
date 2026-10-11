@@ -52,6 +52,15 @@ app.registerExtension({
       },
     ];
   },
+  afterConfigureGraph() {
+    window.__comfymate_instance?.onGraphOrWorkflowChanged();
+  },
+  nodeCreated() {
+    window.__comfymate_instance?.onGraphOrWorkflowChanged();
+  },
+  graphChanged() {
+    window.__comfymate_instance?.onGraphOrWorkflowChanged();
+  },
   async setup() {
     console.log("[ComfyMate] Setting up extension...");
 
@@ -65,6 +74,11 @@ app.registerExtension({
     const chatUI = new ChatUI(app);
     window.__comfymate_instance = chatUI;
     await chatUI.ready;
+
+    // Staggered boot checks to ensure active workflow tab is picked up as soon as ComfyUI mounts
+    setTimeout(() => chatUI.onGraphOrWorkflowChanged(), 350);
+    setTimeout(() => chatUI.onGraphOrWorkflowChanged(), 1000);
+    setTimeout(() => chatUI.onGraphOrWorkflowChanged(), 2500);
 
     // 3. Right-edge sleek drawer handle (Always visible, clean and non-intrusive)
     const addEdgeDrawerHandle = () => {

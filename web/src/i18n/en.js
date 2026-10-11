@@ -183,5 +183,12 @@ export const en = {
   undoneParams: "Reverted parameters for Node #{id}",
   applyFailed: "Failed to apply parameters: {msg}",
   actionApplied: "Applied",
+  linkedWorkflowTip: "This chat is linked to the active canvas workflow. Switching tabs auto-switches chats.",
+  workflowLinkedGreeting: "Linked to active canvas workflow: **{name}**\nYou can now ask questions, analyze the pipeline, or diagnose errors for this workflow.",
+  sectionWorkflowSync: "Canvas & Chat Sync",
+  sectionWorkflowSyncDesc: "Control whether each canvas workflow maintains its own dedicated chat history",
+  syncWorkflowChatLabel: "Dedicated Chat per Canvas Workflow (Recommended)",
+  syncWorkflowChatDesc: "Seamlessly auto-switch chat history when switching ComfyUI canvas tabs for focused assistance",
+  currentCanvasTag: "Current Canvas",
 };
 

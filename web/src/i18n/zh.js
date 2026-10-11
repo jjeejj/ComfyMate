@@ -183,5 +183,12 @@ export const zh = {
   undoneParams: "已撤销节点 #{id} 的参数修改",
   applyFailed: "参数应用失败：{msg}",
   actionApplied: "已生效",
+  linkedWorkflowTip: "当前对话已与此画布工作流绑定，切换画布会自动切换对应会话",
+  workflowLinkedGreeting: "已为你关联当前画布工作流：**{name}**\n你可以直接针对当前工作流提问、分析或排查报错。",
+  sectionWorkflowSync: "画布与对话联动",
+  sectionWorkflowSyncDesc: "控制每个画布标签页是否独立维护专属聊天记录",
+  syncWorkflowChatLabel: "每个画布对应专属对话 (推荐)",
+  syncWorkflowChatDesc: "切换 ComfyUI 画布标签页时自动切换到该画布的历史对话，提问更专注精准",
+  currentCanvasTag: "当前画布",
 };
 

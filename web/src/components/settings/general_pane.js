@@ -5,6 +5,7 @@ export function renderGeneralPane(ctx, container) {
   const currentLang = ctx.config?.language || "auto";
   const currentTemp = typeof ctx.config?.temperature === "number" ? ctx.config.temperature : 0.7;
   const currentMaxTokens = ctx.config?.max_tokens || 4096;
+  const syncWfChat = ctx.config?.sync_workflow_chat !== false;
 
   const detectedLangCode = ctx.detectComfyLanguage();
   const isZh = ctx.getEffectiveLang() === "zh";
@@ -99,7 +100,28 @@ export function renderGeneralPane(ctx, container) {
         </div>
       </div>
 
-      <!-- 3. Dedicated Footer with Version, Shortcut and Save Button -->
+      <!-- 3. Workflow Linkage Card -->
+      <div class="cm-settings-card">
+        <div class="cm-card-header">
+          <div class="cm-card-header-icon">🎨</div>
+          <div>
+            <div class="cm-card-title">${ctx.t("sectionWorkflowSync") || "画布与对话联动"}</div>
+            <div class="cm-card-desc">${ctx.t("sectionWorkflowSyncDesc") || "控制每个画布标签页是否独立维护专属聊天记录"}</div>
+          </div>
+        </div>
+
+        <div class="cm-setting-row">
+          <div class="cm-setting-label-col">
+            <div class="cm-setting-row-title">${ctx.t("syncWorkflowChatLabel") || "每个画布对应专属对话 (推荐)"}</div>
+            <div class="cm-setting-row-desc">${ctx.t("syncWorkflowChatDesc") || "切换 ComfyUI 画布标签页时自动切换到该画布的历史对话，提问更专注精准"}</div>
+          </div>
+          <div class="cm-setting-control-col">
+            <input type="checkbox" id="cm-cfg-sync-wf" ${syncWfChat ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: #3b82f6; cursor: pointer;" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Dedicated Footer with Version, Shortcut and Save Button -->
       <div class="cm-general-footer">
         <div class="cm-general-footer-info">
           <span class="cm-footer-ver">✨ ComfyMate</span>
@@ -123,6 +145,7 @@ export function renderGeneralPane(ctx, container) {
   const tempSlider = container.querySelector("#cm-cfg-temp");
   const tempVal = container.querySelector("#cm-txt-temp-val");
   const maxTokensSelect = container.querySelector("#cm-cfg-max-tokens");
+  const syncWfCheckbox = container.querySelector("#cm-cfg-sync-wf");
 
   tempSlider.addEventListener("input", (e) => {
     tempVal.textContent = parseFloat(e.target.value).toFixed(1);
@@ -133,6 +156,7 @@ export function renderGeneralPane(ctx, container) {
     ctx.config.language = langSelect.value;
     ctx.config.temperature = parseFloat(tempSlider.value);
     ctx.config.max_tokens = parseInt(maxTokensSelect.value, 10);
+    ctx.config.sync_workflow_chat = syncWfCheckbox ? syncWfCheckbox.checked : true;
     ctx.saveConfig();
     ctx.updateStaticUIText();
 

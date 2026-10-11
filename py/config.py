@@ -42,6 +42,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "temperature": 0.7,
     "max_tokens": 4096,
     "stream": True,
+    "sync_workflow_chat": True,
     "providers": [],
 }
 
@@ -76,6 +77,7 @@ def _clean_config(data: Any) -> Dict[str, Any]:
         "temperature": _safe_float(data.get("temperature"), 0.7),
         "max_tokens": _safe_int(data.get("max_tokens"), 4096),
         "stream": bool(data.get("stream", True)),
+        "sync_workflow_chat": bool(data.get("sync_workflow_chat", True)),
         "providers": providers,
     }
 
@@ -146,6 +148,8 @@ def save_config(new_config: Dict[str, Any]) -> Dict[str, Any]:
         current["max_tokens"] = _safe_int(new_config["max_tokens"], 4096)
     if "stream" in new_config:
         current["stream"] = bool(new_config["stream"])
+    if "sync_workflow_chat" in new_config:
+        current["sync_workflow_chat"] = bool(new_config["sync_workflow_chat"])
 
     if "providers" in new_config and isinstance(new_config["providers"], list):
         current_providers_map = {p["id"]: p for p in current.get("providers", []) if isinstance(p, dict) and "id" in p}
