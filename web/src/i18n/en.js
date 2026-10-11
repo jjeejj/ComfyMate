@@ -84,6 +84,8 @@ export const en = {
   promptExplainWf: "Please analyze and explain the execution logic and data flow of this workflow in detail.",
   promptExplainSel: "Please explain what the selected node does and advise on its key parameter settings.",
   promptDiagnoseErr: "The workflow failed during execution. Please analyze the root cause and provide troubleshooting suggestions.",
+  promptDiagnosePotential: "Please thoroughly inspect this workflow's node configurations and connections, analyzing any potential issues that could cause failures or abnormal outputs.",
+  noRuntimeErrorWithIssues: "💡 **No runtime crash error detected**, but health check found **{n} potential configuration issues** (such as unlinked slots or parameter anomalies).\n\nHealth report is displayed below. You can click 'Ask AI for Fix Plan' to resolve them.",
   promptExplainNode: "Please explain node #{id} [{name}], its role, and key configuration recommendations.",
   noConfiguredModels: "⚠️ No Models Configured (Click to Setup)",
   unconfiguredNoticeTitle: "First-Time Setup",

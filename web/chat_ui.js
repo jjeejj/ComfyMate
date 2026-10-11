@@ -444,22 +444,33 @@ export class ChatUI {
 
     this.panel.querySelectorAll(".comfymate-pill[data-action]").forEach((btn) => {
       btn.addEventListener("click", (e) => {
-        const action = e.target.getAttribute("data-action");
+        const targetBtn = e.target.closest(".comfymate-pill[data-action]");
+        const action = targetBtn?.getAttribute("data-action");
         if (action === "explain_workflow") {
           this.sendMessage(this.t("promptExplainWf"));
         } else if (action === "explain_selected") {
           const selected = this.extractor.getSelectedNodes();
           if (selected.length === 0) {
-            this._appendMessage("assistant", `💡 ${this.t("selectNodesFirst") || "请先在画布上选中要分析的节点。"}`);
+            Toast.warning(this.t("selectNodesFirst") || "请先在画布上选中要分析的节点。");
             return;
           }
           this.sendMessage(this.t("promptExplainSel"));
         } else if (action === "diagnose_error") {
-          if (!this.extractor.lastError) {
-            this._appendMessage("assistant", `💡 ${this.t("noErrorDetected") || "当前工作流执行正常，未检测到运行报错。"}`);
-            return;
+          const err = this.extractor.getLastError ? this.extractor.getLastError() : this.extractor.lastError;
+          if (err) {
+            this.sendMessage(this.t("promptDiagnoseErr"));
+          } else {
+            // Check workflow health issues
+            const report = this.actions.diagnoseWorkflow();
+            if (report && report.issues && report.issues.length > 0) {
+              const msg = this.t("noRuntimeErrorWithIssues", { n: report.issues.length }) ||
+                `💡 **当前未捕获到运行时崩溃报错**，但体检发现当前工作流存在 **${report.issues.length} 处潜在配置问题**（如未连接的槽位或参数异常）。\n\n已为您展示体检报告，您可以点击报告下方的「让 AI 提供修复方案」一键修复。`;
+              this._appendMessage("assistant", msg);
+              this._runDoctorCheck();
+            } else {
+              this.sendMessage(this.t("promptDiagnosePotential") || "请帮我全面排查当前工作流的节点配置与连线，分析是否存在可能导致执行失败、报错或生成异常的潜在问题。");
+            }
           }
-          this.sendMessage(this.t("promptDiagnoseErr"));
         } else if (action === "doctor_check") {
           this._runDoctorCheck();
         }
@@ -1104,6 +1115,13 @@ export class ChatUI {
         textSpan.textContent = text;
         msgDiv.appendChild(textSpan);
       }
+    } else if (role === "assistant" && text) {
+      const contentBox = document.createElement("div");
+      contentBox.className = "cm-markdown-body";
+      contentBox.innerHTML = renderMarkdown(text, (k) => this.t(k));
+      msgDiv.appendChild(contentBox);
+      this.messages.push({ role: "assistant", content: text });
+      this._saveCurrentSession();
     }
     messagesContainer.appendChild(msgDiv);
     this._scrollToBottom();

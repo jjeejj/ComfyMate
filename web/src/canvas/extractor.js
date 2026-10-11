@@ -10,6 +10,13 @@ export class ContextExtractor {
   }
 
   _setupErrorInterceptor() {
+    try {
+      const saved = sessionStorage.getItem("comfymate_last_error");
+      if (saved) {
+        this.lastError = JSON.parse(saved);
+      }
+    } catch (_) {}
+
     if (this.app?.api) {
       this.app.api.addEventListener("execution_error", (event) => {
         const detail = event.detail;
@@ -23,13 +30,44 @@ export class ContextExtractor {
             : detail?.traceback,
           timestamp: Date.now(),
         };
+        try {
+          sessionStorage.setItem("comfymate_last_error", JSON.stringify(this.lastError));
+        } catch (_) {}
         console.warn("[ComfyMate] Intercepted execution error:", this.lastError);
       });
     }
   }
 
+  getLastError() {
+    if (this.lastError) return this.lastError;
+    // Check app.last_node_errors or app.node_errors from ComfyUI
+    const nodeErrors = this.app?.last_node_errors || this.app?.node_errors;
+    if (nodeErrors && typeof nodeErrors === "object" && Object.keys(nodeErrors).length > 0) {
+      const firstNodeId = Object.keys(nodeErrors)[0];
+      const errInfo = nodeErrors[firstNodeId];
+      const node = this.app?.graph?.getNodeById(firstNodeId);
+      const errMsg = errInfo?.errors?.map((e) => e.message || e.details || JSON.stringify(e)).join("; ") || "Node validation error";
+      this.lastError = {
+        node_id: firstNodeId,
+        node_type: node?.type || "Unknown",
+        exception_type: "NodeValidationError",
+        message: errMsg,
+        traceback: "",
+        timestamp: Date.now(),
+      };
+      try {
+        sessionStorage.setItem("comfymate_last_error", JSON.stringify(this.lastError));
+      } catch (_) {}
+      return this.lastError;
+    }
+    return null;
+  }
+
   clearError() {
     this.lastError = null;
+    try {
+      sessionStorage.removeItem("comfymate_last_error");
+    } catch (_) {}
   }
 
   _getNodeTitle(node) {
@@ -421,7 +459,7 @@ export class ContextExtractor {
       workflow_name: wf?.name || null,
       selected_nodes: this.getSelectedNodes(),
       workflow_summary: this.getWorkflowSummary(),
-      error_info: this.lastError,
+      error_info: this.getLastError(),
     };
   }
 }

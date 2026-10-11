@@ -84,6 +84,8 @@ export const zh = {
   promptExplainWf: "请详细梳理并解释当前工作流的执行逻辑和整体数据流走向。",
   promptExplainSel: "请重点解释我当前选中的节点是做什么的，以及它的关键参数该如何设置。",
   promptDiagnoseErr: "刚才工作流运行报错了，请帮我分析具体原因，并给出排查建议。",
+  promptDiagnosePotential: "请帮我全面排查当前工作流的节点配置与连线，分析是否存在可能导致执行失败、报错或生成异常的潜在问题。",
+  noRuntimeErrorWithIssues: "💡 **当前未捕获到运行时崩溃报错**，但体检发现当前工作流存在 **{n} 处潜在配置问题**（如未连接的槽位或参数异常）。\n\n已为您展示体检报告，您可以点击报告下方的「让 AI 提供修复方案」一键修复。",
   promptExplainNode: "请重点解释节点 #{id} [{name}] 的作用和关键配置建议。",
   noConfiguredModels: "⚠️ 未配置模型 (点击去设置)",
   unconfiguredNoticeTitle: "首次使用提示",
