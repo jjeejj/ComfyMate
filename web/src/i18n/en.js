@@ -198,5 +198,15 @@ export const en = {
   addNode: "Add to Canvas",
   nodeAddedToCanvas: "Successfully added node [{name}] to canvas",
   nodeAddFailed: "Failed to add node: {msg}",
+  suggestedConnection: "Suggested Connection",
+  connectNodes: "Connect Nodes",
+  disconnectNodes: "Disconnect",
+  connectionApplied: "Connected",
+  connectionSuccess: "Successfully connected node slots",
+  connectionFailed: "Connection failed: {msg}",
+  disconnectSuccess: "Successfully disconnected node links",
+  connectionsCount: "connection(s)",
+  fromSlot: "Out",
+  toSlot: "In",
 };
 

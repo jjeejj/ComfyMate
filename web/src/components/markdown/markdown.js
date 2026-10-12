@@ -237,7 +237,7 @@ export function renderMarkdown(text, t = (k) => k) {
     const isJsonAction =
       (item.lang === "json" || !item.lang || item.lang === "text") &&
       item.code.includes('"action"') &&
-      (item.code.includes('"set_parameters"') || item.code.includes('"recommend_nodes"'));
+      (item.code.includes('"set_parameters"') || item.code.includes('"recommend_nodes"') || item.code.includes('"connect_nodes"'));
 
     if (isActionLang || isJsonAction) {
       try {
@@ -326,6 +326,72 @@ export function renderMarkdown(text, t = (k) => k) {
           `;
           html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
           return;
+        } else if (parsed && parsed.action === "connect_nodes") {
+          const rawList = Array.isArray(parsed.connections) && parsed.connections.length > 0
+            ? parsed.connections
+            : (parsed.from_node !== undefined && parsed.to_node !== undefined)
+              ? [{
+                  from_node: parsed.from_node,
+                  from_slot: parsed.from_slot,
+                  to_node: parsed.to_node,
+                  to_slot: parsed.to_slot,
+                  reason: parsed.reason || ""
+                }]
+              : [];
+
+          if (rawList.length > 0) {
+            const overallReason = parsed.reason ? escapeHtml(parsed.reason) : "";
+            const connItems = rawList.map((c) => {
+              const fromNid = parseInt(c.from_node, 10);
+              const toNid = parseInt(c.to_node, 10);
+              const fromSlot = escapeHtml(String(c.from_slot ?? ""));
+              const toSlot = escapeHtml(String(c.to_slot ?? ""));
+              const reasonEsc = c.reason ? escapeHtml(c.reason) : "";
+
+              return `
+                <div class="cm-conn-item">
+                  <div class="cm-conn-flow">
+                    <button class="cm-action-btn-locate cm-conn-node-badge" type="button" data-node-id="${fromNid}" title="${t("locateNode") || "在画布中定位节点"}">
+                      <span>📍</span> <span>Node #${fromNid}</span>
+                    </button>
+                    <span class="cm-conn-slot cm-conn-slot-out" title="${t("fromSlot") || "输出端口"}">${fromSlot}</span>
+                    <span class="cm-conn-arrow">➜</span>
+                    <span class="cm-conn-slot cm-conn-slot-in" title="${t("toSlot") || "输入端口"}">${toSlot}</span>
+                    <button class="cm-action-btn-locate cm-conn-node-badge" type="button" data-node-id="${toNid}" title="${t("locateNode") || "在画布中定位节点"}">
+                      <span>📍</span> <span>Node #${toNid}</span>
+                    </button>
+                  </div>
+                  ${reasonEsc && reasonEsc !== overallReason ? `<div class="cm-conn-item-reason">${reasonEsc}</div>` : ""}
+                </div>
+              `;
+            }).join("");
+
+            const connectionsJsonStr = encodeURIComponent(JSON.stringify(rawList));
+            const cardHtml = `
+              <div class="cm-action-card cm-connect-nodes-card" data-action="connect_nodes" data-connections="${connectionsJsonStr}">
+                <div class="cm-action-header">
+                  <div class="cm-action-title">
+                    <span class="cm-action-icon">🔗</span>
+                    <span>${t("suggestedConnection") || "AI 建议连线"}</span>
+                  </div>
+                  <span class="cm-conn-count">${rawList.length} ${t("connectionsCount") || "条连线"}</span>
+                </div>
+                <div class="cm-action-body">
+                  <div class="cm-conn-list">
+                    ${connItems}
+                  </div>
+                  ${overallReason ? `<div class="cm-action-reason">${overallReason}</div>` : ""}
+                </div>
+                <div class="cm-action-footer">
+                  <button class="cm-action-btn cm-action-btn-connect" type="button" data-connections="${connectionsJsonStr}">
+                    <span>🔗</span> <span>${t("connectNodes") || "一键连线"}</span>
+                  </button>
+                </div>
+              </div>
+            `;
+            html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
+            return;
+          }
         }
       } catch (e) {
         // Fall back to normal code block rendering

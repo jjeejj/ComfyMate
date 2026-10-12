@@ -503,6 +503,319 @@ export class CanvasActionManager {
   }
 
   /**
+   * Helper: Resolve output slot index on a source node by name, index, or type.
+   */
+  _resolveOutputSlot(node, slotRef) {
+    if (!node || !node.outputs || !Array.isArray(node.outputs) || node.outputs.length === 0) {
+      return -1;
+    }
+
+    if (slotRef === undefined || slotRef === null) {
+      return node.outputs.length === 1 ? 0 : -1;
+    }
+
+    // Direct numeric index check
+    if (typeof slotRef === "number") {
+      return slotRef >= 0 && slotRef < node.outputs.length ? slotRef : -1;
+    }
+
+    const strRef = String(slotRef).trim();
+    const numIdx = parseInt(strRef, 10);
+    if (!isNaN(numIdx) && String(numIdx) === strRef && numIdx >= 0 && numIdx < node.outputs.length) {
+      return numIdx;
+    }
+
+    const lowerRef = strRef.toLowerCase();
+
+    // 1. Exact match on slot name
+    let idx = node.outputs.findIndex(
+      (out) => out && out.name && out.name.trim().toLowerCase() === lowerRef
+    );
+    if (idx !== -1) return idx;
+
+    // 2. Exact match on slot type
+    idx = node.outputs.findIndex(
+      (out) => out && out.type && String(out.type).trim().toLowerCase() === lowerRef
+    );
+    if (idx !== -1) return idx;
+
+    // 3. Substring match on slot name
+    idx = node.outputs.findIndex(
+      (out) => out && out.name && (out.name.toLowerCase().includes(lowerRef) || lowerRef.includes(out.name.toLowerCase()))
+    );
+    if (idx !== -1) return idx;
+
+    // 4. Fallback if single output
+    if (node.outputs.length === 1) return 0;
+
+    return -1;
+  }
+
+  /**
+   * Helper: Resolve input slot index on a target node by name, index, type, or common aliases.
+   */
+  _resolveInputSlot(node, slotRef, preferredType = null) {
+    if (!node || !node.inputs || !Array.isArray(node.inputs) || node.inputs.length === 0) {
+      return -1;
+    }
+
+    if (slotRef === undefined || slotRef === null) {
+      // If preferredType provided, try matching by type first
+      if (preferredType) {
+        const pType = String(preferredType).trim().toLowerCase();
+        const pIdx = node.inputs.findIndex(
+          (inp) => inp && inp.type && String(inp.type).trim().toLowerCase() === pType
+        );
+        if (pIdx !== -1) return pIdx;
+      }
+      return node.inputs.length === 1 ? 0 : -1;
+    }
+
+    // Direct numeric index check
+    if (typeof slotRef === "number") {
+      return slotRef >= 0 && slotRef < node.inputs.length ? slotRef : -1;
+    }
+
+    const strRef = String(slotRef).trim();
+    const numIdx = parseInt(strRef, 10);
+    if (!isNaN(numIdx) && String(numIdx) === strRef && numIdx >= 0 && numIdx < node.inputs.length) {
+      return numIdx;
+    }
+
+    const lowerRef = strRef.toLowerCase();
+
+    // 1. Exact match on slot name
+    let idx = node.inputs.findIndex(
+      (inp) => inp && inp.name && inp.name.trim().toLowerCase() === lowerRef
+    );
+    if (idx !== -1) return idx;
+
+    // 2. Exact match on slot type
+    idx = node.inputs.findIndex(
+      (inp) => inp && inp.type && String(inp.type).trim().toLowerCase() === lowerRef
+    );
+    if (idx !== -1) return idx;
+
+    // 3. Common domain aliases
+    const aliasMap = {
+      image: ["images", "image", "pixels"],
+      images: ["images", "image", "pixels"],
+      pixels: ["pixels", "image", "images"],
+      latent: ["samples", "latent", "latents"],
+      latents: ["samples", "latent", "latents"],
+      samples: ["samples", "latent", "latents"],
+      model: ["model"],
+      clip: ["clip"],
+      vae: ["vae"],
+      mask: ["mask", "masks"],
+      masks: ["mask", "masks"],
+      conditioning: ["positive", "negative", "conditioning"],
+      positive: ["positive", "conditioning"],
+      negative: ["negative", "conditioning"],
+    };
+
+    const aliases = aliasMap[lowerRef] || [];
+    for (const alias of aliases) {
+      idx = node.inputs.findIndex(
+        (inp) => inp && inp.name && inp.name.trim().toLowerCase() === alias
+      );
+      if (idx !== -1) return idx;
+    }
+
+    // 4. Substring match on slot name
+    idx = node.inputs.findIndex(
+      (inp) => inp && inp.name && (inp.name.toLowerCase().includes(lowerRef) || lowerRef.includes(inp.name.toLowerCase()))
+    );
+    if (idx !== -1) return idx;
+
+    // 5. Fallback match by preferredType
+    if (preferredType) {
+      const pType = String(preferredType).trim().toLowerCase();
+      idx = node.inputs.findIndex(
+        (inp) => inp && inp.type && String(inp.type).trim().toLowerCase() === pType
+      );
+      if (idx !== -1) return idx;
+    }
+
+    // 6. Fallback if single input
+    if (node.inputs.length === 1) return 0;
+
+    return -1;
+  }
+
+  /**
+   * Connect output port(s) from source node(s) to input port(s) of target node(s).
+   * Supports single connection or batch connections list.
+   * Highlights connected nodes and supports undo/disconnection.
+   */
+  connectNodes(connectionOrList) {
+    if (!connectionOrList) {
+      return { success: false, errors: ["No connection parameters provided"] };
+    }
+
+    const list = Array.isArray(connectionOrList)
+      ? connectionOrList
+      : connectionOrList.connections && Array.isArray(connectionOrList.connections)
+        ? connectionOrList.connections
+        : [connectionOrList];
+
+    if (list.length === 0) {
+      return { success: false, errors: ["Empty connection list"] };
+    }
+
+    const graph = this.app?.graph;
+    if (!graph) {
+      return { success: false, errors: ["ComfyUI graph not available"] };
+    }
+
+    const successful = [];
+    const errors = [];
+
+    for (const item of list) {
+      const fromNodeId = item.from_node ?? item.fromNode;
+      const toNodeId = item.to_node ?? item.toNode;
+      const fromSlotRef = item.from_slot ?? item.fromSlot;
+      const toSlotRef = item.to_slot ?? item.toSlot;
+
+      const sourceNode = this.getNode(fromNodeId);
+      if (!sourceNode) {
+        errors.push(`Source Node #${fromNodeId} not found on canvas`);
+        continue;
+      }
+
+      const targetNode = this.getNode(toNodeId);
+      if (!targetNode) {
+        errors.push(`Target Node #${toNodeId} not found on canvas`);
+        continue;
+      }
+
+      const outSlotIdx = this._resolveOutputSlot(sourceNode, fromSlotRef);
+      if (outSlotIdx === -1) {
+        errors.push(`Output slot '${fromSlotRef}' not found on Node #${fromNodeId} [${sourceNode.title || sourceNode.type}]`);
+        continue;
+      }
+
+      const outSlotObj = sourceNode.outputs?.[outSlotIdx];
+      const preferredType = outSlotObj?.type;
+
+      const inSlotIdx = this._resolveInputSlot(targetNode, toSlotRef, preferredType);
+      if (inSlotIdx === -1) {
+        errors.push(`Input slot '${toSlotRef}' not found on Node #${toNodeId} [${targetNode.title || targetNode.type}]`);
+        continue;
+      }
+
+      const inSlotObj = targetNode.inputs?.[inSlotIdx];
+
+      // Execute LiteGraph connection
+      try {
+        const connectRes = sourceNode.connect(outSlotIdx, targetNode, inSlotIdx);
+        const linkId = targetNode.inputs?.[inSlotIdx]?.link;
+        if (connectRes === false && (linkId === null || linkId === undefined)) {
+          errors.push(`LiteGraph rejected connection between Node #${sourceNode.id} [${outSlotObj?.name}] and Node #${targetNode.id} [${inSlotObj?.name}]`);
+          continue;
+        }
+      } catch (err) {
+        console.error(`[ComfyMate] Error connecting Node #${sourceNode.id} to #${targetNode.id}:`, err);
+        errors.push(`Failed to link Node #${sourceNode.id} to #${targetNode.id}: ${err.message}`);
+        continue;
+      }
+
+      const linkId = targetNode.inputs?.[inSlotIdx]?.link;
+      const record = {
+        linkId: linkId !== undefined ? linkId : null,
+        fromNodeId: sourceNode.id,
+        fromNodeTitle: sourceNode.title || sourceNode.type,
+        fromSlot: outSlotIdx,
+        fromSlotName: outSlotObj?.name || `slot_${outSlotIdx}`,
+        toNodeId: targetNode.id,
+        toNodeTitle: targetNode.title || targetNode.type,
+        toSlot: inSlotIdx,
+        toSlotName: inSlotObj?.name || `slot_${inSlotIdx}`,
+      };
+
+      successful.push(record);
+
+      // Flash visual highlight on both nodes
+      this.flashNode(targetNode);
+      this.flashNode(sourceNode);
+    }
+
+    if (successful.length > 0) {
+      if (graph.setDirtyCanvas) {
+        graph.setDirtyCanvas(true, true);
+      }
+      // Center canvas on the last connected target node
+      const lastTarget = this.getNode(successful[successful.length - 1].toNodeId);
+      if (lastTarget) {
+        this.centerOnNode(lastTarget);
+      }
+    }
+
+    return {
+      success: successful.length > 0,
+      links: successful,
+      errors,
+    };
+  }
+
+  /**
+   * Disconnect previously created node connections (Undo action).
+   */
+  disconnectNodes(linksList) {
+    if (!linksList) {
+      return { success: false, message: "No link info provided" };
+    }
+
+    const list = Array.isArray(linksList) ? linksList : [linksList];
+    const graph = this.app?.graph;
+    let disconnectedCount = 0;
+
+    for (const record of list) {
+      const toNodeId = record.toNodeId ?? record.to_node;
+      const toSlot = record.toSlot ?? record.to_slot;
+      const linkId = record.linkId ?? record.link_id;
+
+      let disconnected = false;
+
+      // Method 1: Disconnect via targetNode.disconnectInput
+      if (toNodeId !== undefined && toSlot !== undefined) {
+        const targetNode = this.getNode(toNodeId);
+        if (targetNode && typeof targetNode.disconnectInput === "function") {
+          try {
+            targetNode.disconnectInput(toSlot);
+            disconnected = true;
+          } catch (e) {
+            console.warn(`[ComfyMate] Error disconnecting input on Node #${toNodeId}:`, e);
+          }
+        }
+      }
+
+      // Method 2: Disconnect via graph.removeLink
+      if (!disconnected && linkId !== null && linkId !== undefined && graph && typeof graph.removeLink === "function") {
+        try {
+          graph.removeLink(linkId);
+          disconnected = true;
+        } catch (e) {
+          console.warn(`[ComfyMate] Error removing link #${linkId}:`, e);
+        }
+      }
+
+      if (disconnected) {
+        disconnectedCount++;
+      }
+    }
+
+    if (disconnectedCount > 0 && graph && graph.setDirtyCanvas) {
+      graph.setDirtyCanvas(true, true);
+    }
+
+    return {
+      success: disconnectedCount > 0,
+      count: disconnectedCount,
+    };
+  }
+
+  /**
    * Inspect current workflow topology and parameters for common pitfalls:
    * 1. Missing required connections on essential nodes (KSampler, VAE, CLIP)
    * 2. Empty prompts on text encoders

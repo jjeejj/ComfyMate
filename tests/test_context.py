@@ -67,6 +67,8 @@ def test_system_prompt_actions():
     prompt = build_system_prompt()
     assert "comfymate-action" in prompt
     assert "set_parameters" in prompt
+    assert "recommend_nodes" in prompt
+    assert "connect_nodes" in prompt
     assert "Node #<ID>" in prompt
     print("✅ System prompt action instructions test passed!")
 

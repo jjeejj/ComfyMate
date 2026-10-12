@@ -26,16 +26,21 @@ export class ChatUI {
     // Workflow Sync & Multi-Canvas State
     this.activeWorkflow = null;
     this._lastWorkflowKey = null;
-    this._workflowSessionMap = {};
-    this._workflowChatCache = {}; // wfName -> { sessionId, title, messages }
+    this._workflowChatCache = {}; // in-memory cache: wfName -> { sessionId, title, messages }
     this._workflowDrafts = {};
     this._workflowCheckTimer = null;
     this._workflowObserver = null;
+    // Clean up any legacy localStorage session keys so server disk files are the sole source of truth
     try {
-      const mapCached = localStorage.getItem("comfymate_wf_session_map");
-      if (mapCached) {
-        this._workflowSessionMap = JSON.parse(mapCached);
-        this._sanitizeWorkflowSessionMap();
+      localStorage.removeItem("comfymate_wf_session_map");
+      localStorage.removeItem("comfymate_chat_history");
+      localStorage.removeItem("comfymate_last_active_session_id");
+      localStorage.removeItem("comfymate_chat_history_latest");
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("comfymate_chat_history_wf_")) {
+          localStorage.removeItem(k);
+        }
       }
     } catch (_) {}
 
@@ -630,6 +635,67 @@ export class ChatUI {
           } else {
             Toast.error(this.t("nodeAddFailed", { msg: res.message || "Failed to add node" }));
           }
+        }
+        return;
+      }
+
+      // 8. Connect Nodes Card: Connect button
+      const connectBtn = e.target.closest(".cm-action-btn-connect");
+      if (connectBtn) {
+        const card = connectBtn.closest(".cm-action-card");
+        const rawConns = decodeURIComponent(connectBtn.getAttribute("data-connections") || "[]");
+        try {
+          const connections = JSON.parse(rawConns);
+          const res = this.actions.connectNodes(connections);
+          if (res.success) {
+            if (card) {
+              const footer = card.querySelector(".cm-action-footer");
+              if (footer) {
+                const linksJson = encodeURIComponent(JSON.stringify(res.links));
+                footer.innerHTML = `
+                  <span class="cm-action-applied-badge">✅ ${this.t("connectionApplied") || "已连接"}</span>
+                  <button class="cm-action-btn cm-action-btn-disconnect" type="button" data-links="${linksJson}">
+                    <span>↩️</span> <span>${this.t("disconnectNodes") || "撤回连线"}</span>
+                  </button>
+                `;
+              }
+            }
+            Toast.success(this.t("connectionSuccess") || "已成功连接节点端口");
+          } else {
+            const errMsg = (res.errors && res.errors[0]) || "Connection failed";
+            Toast.error(this.t("connectionFailed", { msg: errMsg }));
+          }
+        } catch (err) {
+          console.error("[ComfyMate] Failed to connect nodes:", err);
+          Toast.error(this.t("connectionFailed", { msg: err.message }));
+        }
+        return;
+      }
+
+      // 9. Connect Nodes Card: Disconnect (Undo) button
+      const disconnectBtn = e.target.closest(".cm-action-btn-disconnect");
+      if (disconnectBtn) {
+        const card = disconnectBtn.closest(".cm-action-card");
+        const rawLinks = decodeURIComponent(disconnectBtn.getAttribute("data-links") || "[]");
+        try {
+          const links = JSON.parse(rawLinks);
+          const res = this.actions.disconnectNodes(links);
+          if (res.success) {
+            if (card) {
+              const footer = card.querySelector(".cm-action-footer");
+              const origConnsJson = card.getAttribute("data-connections") || "[]";
+              if (footer) {
+                footer.innerHTML = `
+                  <button class="cm-action-btn cm-action-btn-connect" type="button" data-connections="${origConnsJson}">
+                    <span>🔗</span> <span>${this.t("connectNodes") || "一键连线"}</span>
+                  </button>
+                `;
+              }
+            }
+            Toast.info(this.t("disconnectSuccess") || "已撤回节点连线");
+          }
+        } catch (err) {
+          console.error("[ComfyMate] Failed to disconnect nodes:", err);
         }
         return;
       }
@@ -1244,20 +1310,38 @@ export class ChatUI {
       checks++;
       const currentWf = this.extractor?.getCurrentWorkflowInfo();
       if (currentWf && currentWf.name) {
+        clearInterval(this._bootWatcherTimer);
+        this._bootWatcherTimer = null;
+
+        // If we restored messages during boot and current workflow tab just finished mounting:
+        if (this.messages && this.messages.length > 0) {
+          this._isBootRestoring = false;
+          this.activeWorkflow = currentWf;
+          this._lastWorkflowKey = currentWf.name;
+          this._updateHeaderWorkflowBadge();
+          if (this.currentSessionId) {
+            this._workflowChatCache[currentWf.name] = {
+              sessionId: this.currentSessionId,
+              title: this.currentSessionTitle,
+              messages: [...this.messages],
+            };
+            // Ensure disk session file has workflow_name recorded
+            this._saveCurrentSession(currentWf.name, this.currentSessionId, this.messages, this.currentSessionTitle);
+          }
+          return;
+        }
+
         if (!this.activeWorkflow || this.activeWorkflow.name !== currentWf.name) {
           console.log("[ComfyMate] Boot workflow watcher auto-detected active workflow:", currentWf.name);
-          clearInterval(this._bootWatcherTimer);
-          this._bootWatcherTimer = null;
           await this._handleWorkflowTabSelected(currentWf);
           return;
         } else {
           this._updateHeaderWorkflowBadge();
-          clearInterval(this._bootWatcherTimer);
-          this._bootWatcherTimer = null;
           return;
         }
       }
       if (checks >= maxChecks) {
+        this._isBootRestoring = false;
         clearInterval(this._bootWatcherTimer);
         this._bootWatcherTimer = null;
       }
@@ -1332,85 +1416,6 @@ export class ChatUI {
     }
   }
 
-  _sanitizeWorkflowSessionMap() {
-    const seenSessions = new Map();
-    let changed = false;
-    for (const [wf, sessId] of Object.entries(this._workflowSessionMap)) {
-      if (!sessId || !wf) {
-        delete this._workflowSessionMap[wf];
-        changed = true;
-        continue;
-      }
-      if (seenSessions.has(sessId)) {
-        console.warn(`[ComfyMate] Collision detected: session ${sessId} shared between '${seenSessions.get(sessId)}' and '${wf}'. Unbinding duplicate.`);
-        delete this._workflowSessionMap[wf];
-        if (this._workflowChatCache[wf]?.sessionId === sessId) {
-          delete this._workflowChatCache[wf];
-        }
-        this._clearWorkflowHistoryLocal(wf);
-        changed = true;
-      } else {
-        seenSessions.set(sessId, wf);
-      }
-    }
-
-    // Also sanitize in-memory cache against cross-workflow session ID bleed
-    for (const [wf, cacheItem] of Object.entries(this._workflowChatCache)) {
-      if (!cacheItem || !wf) continue;
-      if (cacheItem.sessionId) {
-        for (const [otherWf, otherItem] of Object.entries(this._workflowChatCache)) {
-          if (otherWf !== wf && otherItem?.sessionId === cacheItem.sessionId) {
-            console.warn(`[ComfyMate] Cache collision: session ${cacheItem.sessionId} shared between '${wf}' and '${otherWf}'. Clearing duplicate cache.`);
-            delete this._workflowChatCache[otherWf];
-            delete this._workflowSessionMap[otherWf];
-            this._clearWorkflowHistoryLocal(otherWf);
-            changed = true;
-          }
-        }
-      }
-    }
-
-    if (changed) {
-      try {
-        localStorage.setItem("comfymate_wf_session_map", JSON.stringify(this._workflowSessionMap));
-      } catch (_) {}
-    }
-  }
-
-  _getWorkflowHistoryKey(wfName) {
-    return `comfymate_chat_history_wf_${encodeURIComponent(wfName || "default")}`;
-  }
-
-  _saveWorkflowHistoryLocal(wfName, messages) {
-    if (!wfName) return;
-    try {
-      const key = this._getWorkflowHistoryKey(wfName);
-      const toSave = messages.slice(-50);
-      localStorage.setItem(key, JSON.stringify(toSave));
-    } catch (_) {}
-  }
-
-  _loadWorkflowHistoryLocal(wfName) {
-    if (!wfName) return null;
-    try {
-      const key = this._getWorkflowHistoryKey(wfName);
-      const raw = localStorage.getItem(key);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  _clearWorkflowHistoryLocal(wfName) {
-    if (!wfName) return;
-    try {
-      const key = this._getWorkflowHistoryKey(wfName);
-      localStorage.removeItem(key);
-    } catch (_) {}
-  }
-
   async _switchWorkflowChat(wf, prevKey) {
     if (!wf || !wf.name) return;
     const newWfName = wf.name;
@@ -1443,7 +1448,7 @@ export class ChatUI {
         messages: prevMessages,
       };
 
-      // Persist to server with fixed snapshot parameters (detached)
+      // Persist to server local JSON file (detached)
       this._saveCurrentSession(prevKey, prevSessionId, prevMessages, prevTitle);
     }
 
@@ -1452,7 +1457,7 @@ export class ChatUI {
     this._lastWorkflowKey = newWfName;
     this._updateHeaderWorkflowBadge();
 
-    // 4. Synchronously switch view to avoid showing old workflow's messages
+    // 4. Synchronously switch view if in-memory cache exists
     if (this._workflowChatCache[newWfName]) {
       const cached = this._workflowChatCache[newWfName];
       this.currentSessionId = cached.sessionId;
@@ -1463,63 +1468,37 @@ export class ChatUI {
       return;
     }
 
-    // If not in in-memory cache, IMMEDIATELY clear messages so prev messages NEVER show or leak
-    this.messages = [];
-    this.currentSessionId = null;
-    this.currentSessionTitle = newWfName;
-    const messagesContainer = this.panel?.querySelector("#cm-messages");
-    if (messagesContainer) {
-      messagesContainer.innerHTML = `
-        <div class="comfymate-message assistant" id="cm-welcome-msg"></div>
-      `;
-    }
-    this._updateStaticUIText();
-    if (inputEl) inputEl.value = this._workflowDrafts[newWfName] || "";
-
-    // 5. Asynchronously retrieve saved session for new workflow
-    this._sanitizeWorkflowSessionMap();
-    const targetSessionId = this._workflowSessionMap[newWfName] || null;
-
-    if (targetSessionId) {
-      try {
-        const res = await ApiClient.getSession(targetSessionId);
-        if (this._switchGenerationToken !== switchToken || this.activeWorkflow?.name !== newWfName) {
-          return; // Discard stale response
-        }
-        if (res && res.status === "ok" && res.session) {
-          if (!res.session.workflow_name || res.session.workflow_name === newWfName) {
-            this.currentSessionId = res.session.id;
-            this.currentSessionTitle = res.session.title || newWfName;
-            this.messages = Array.isArray(res.session.messages) ? res.session.messages : [];
-            this._workflowChatCache[newWfName] = {
-              sessionId: this.currentSessionId,
-              title: this.currentSessionTitle,
-              messages: [...this.messages],
-            };
-            this._renderMessages(this.messages);
-            return;
-          } else {
-            console.warn(`[ComfyMate] Session ${targetSessionId} belongs to '${res.session.workflow_name}', not '${newWfName}'. Disconnecting.`);
-            delete this._workflowSessionMap[newWfName];
-            this._sanitizeWorkflowSessionMap();
-          }
-        }
-      } catch (e) {
-        console.warn(`[ComfyMate] Failed to restore session ${targetSessionId} for ${newWfName}:`, e);
+    // Only clear messages if prevKey is non-null (actual tab switch by user)
+    // or if we have no messages currently loaded
+    if (prevKey !== null || !this.messages || this.messages.length === 0) {
+      this.messages = [];
+      this.currentSessionId = null;
+      this.currentSessionTitle = newWfName;
+      const messagesContainer = this.panel?.querySelector("#cm-messages");
+      if (messagesContainer) {
+        messagesContainer.innerHTML = `
+          <div class="comfymate-message assistant" id="cm-welcome-msg"></div>
+        `;
       }
+      this._updateStaticUIText();
+      if (inputEl) inputEl.value = this._workflowDrafts[newWfName] || "";
     }
 
-    // Option C: Search backend sessions list for matching workflow_name
+    // 5. Query server session files for a session matching newWfName
     try {
       const res = await ApiClient.getSessions();
       if (this._switchGenerationToken !== switchToken || this.activeWorkflow?.name !== newWfName) {
         return; // Discard stale response
       }
-      if (res && res.status === "ok" && Array.isArray(res.sessions)) {
-        const match = res.sessions.find((s) =>
-          s.workflow_name === newWfName &&
-          !Object.entries(this._workflowSessionMap).some(([w, id]) => w !== newWfName && id === s.id)
-        );
+      if (res && res.status === "ok" && Array.isArray(res.sessions) && res.sessions.length > 0) {
+        let match = res.sessions.find((s) => s.workflow_name === newWfName);
+        if (!match && prevKey === null) {
+          // On boot restore, if no session has this exact workflow_name, check if top session has empty workflow_name
+          const top = res.sessions[0];
+          if (!top.workflow_name || top.workflow_name === newWfName) {
+            match = top;
+          }
+        }
         if (match) {
           const detailRes = await ApiClient.getSession(match.id);
           if (this._switchGenerationToken !== switchToken || this.activeWorkflow?.name !== newWfName) {
@@ -1529,8 +1508,6 @@ export class ChatUI {
             this.currentSessionId = detailRes.session.id;
             this.currentSessionTitle = detailRes.session.title || newWfName;
             this.messages = Array.isArray(detailRes.session.messages) ? detailRes.session.messages : [];
-            this._workflowSessionMap[newWfName] = this.currentSessionId;
-            this._sanitizeWorkflowSessionMap();
             this._workflowChatCache[newWfName] = {
               sessionId: this.currentSessionId,
               title: this.currentSessionTitle,
@@ -1543,30 +1520,22 @@ export class ChatUI {
       }
     } catch (_) {}
 
-    // Option D: Check per-workflow local storage
-    const localMsgs = this._loadWorkflowHistoryLocal(newWfName);
-    if (this._switchGenerationToken === switchToken && this.activeWorkflow?.name === newWfName) {
-      if (localMsgs && localMsgs.length > 0) {
-        this.currentSessionId = null;
-        this.currentSessionTitle = newWfName;
-        this.messages = localMsgs;
-        this._workflowChatCache[newWfName] = {
-          sessionId: null,
-          title: newWfName,
-          messages: [...this.messages],
-        };
-        this._renderMessages(this.messages);
-        return;
-      }
-    }
-
-    // Option E: Initialized as fresh clean session
+    // 6. Initialize clean session for this workflow if none found
     if (this._switchGenerationToken === switchToken && this.activeWorkflow?.name === newWfName) {
       this._workflowChatCache[newWfName] = {
         sessionId: null,
         title: newWfName,
         messages: [],
       };
+      if (!this.messages || this.messages.length === 0) {
+        const messagesContainer = this.panel?.querySelector("#cm-messages");
+        if (messagesContainer) {
+          messagesContainer.innerHTML = `
+            <div class="comfymate-message assistant" id="cm-welcome-msg"></div>
+          `;
+        }
+        this._updateStaticUIText();
+      }
     }
   }
 
@@ -1581,7 +1550,6 @@ export class ChatUI {
         title: wfName,
         messages: [],
       };
-      this._clearWorkflowHistoryLocal(wfName);
     }
 
     const messagesContainer = this.panel?.querySelector("#cm-messages");
@@ -1616,10 +1584,7 @@ export class ChatUI {
       }
     }
 
-    // Save locally per-workflow
-    this._saveWorkflowHistoryLocal(wfName, messages);
-
-    // Keep in-memory cache synchronized
+    // Keep in-memory cache synchronized for fast switching
     if (wfName) {
       this._workflowChatCache[wfName] = {
         sessionId: sessId,
@@ -1646,8 +1611,6 @@ export class ChatUI {
             this._workflowChatCache[wfName].sessionId = newId;
             this._workflowChatCache[wfName].title = res.session.title;
           }
-          this._workflowSessionMap[wfName] = newId;
-          this._sanitizeWorkflowSessionMap();
         }
       }
     } catch (err) {
@@ -1656,15 +1619,14 @@ export class ChatUI {
   }
 
   async _restoreHistory() {
-    this._sanitizeWorkflowSessionMap();
     const syncEnabled = this.config?.sync_workflow_chat !== false;
 
-    let currentWf = this.extractor.getCurrentWorkflowInfo();
+    let currentWf = this.extractor?.getCurrentWorkflowInfo();
     if (!currentWf) {
-      // Retry for up to 1200ms to allow ComfyUI graph/topbar/Pinia to finish mounting
-      for (let i = 0; i < 12; i++) {
+      // Retry briefly to allow ComfyUI graph/topbar/Pinia to finish mounting
+      for (let i = 0; i < 6; i++) {
         await new Promise((r) => setTimeout(r, 100));
-        currentWf = this.extractor.getCurrentWorkflowInfo();
+        currentWf = this.extractor?.getCurrentWorkflowInfo();
         if (currentWf) break;
       }
     }
@@ -1676,16 +1638,57 @@ export class ChatUI {
 
       if (syncEnabled) {
         await this._switchWorkflowChat(currentWf, null);
-        return;
+        if (this.messages && this.messages.length > 0) {
+          this._isBootRestoring = true;
+          return;
+        }
       }
     }
 
+    // Fallback: Restore latest session directly from server local session files
     try {
       const res = await ApiClient.getSessions();
       if (res && res.status === "ok" && Array.isArray(res.sessions) && res.sessions.length > 0) {
-        const latestSession = res.sessions[0];
-        await this._switchSession(latestSession.id);
-        return;
+        let targetSession = null;
+        const currentWfName = currentWf?.name;
+
+        // Try matching workflow name first
+        if (currentWfName) {
+          targetSession = res.sessions.find((s) => s.workflow_name === currentWfName);
+        }
+        // Otherwise take the latest session file on disk
+        if (!targetSession) {
+          targetSession = res.sessions[0];
+        }
+
+        if (targetSession) {
+          const detailRes = await ApiClient.getSession(targetSession.id);
+          if (detailRes && detailRes.status === "ok" && detailRes.session) {
+            const sess = detailRes.session;
+            this.currentSessionId = sess.id;
+            this.currentSessionTitle = sess.title || "";
+            this.messages = Array.isArray(sess.messages) ? sess.messages : [];
+            this._renderMessages(this.messages);
+
+            const wfKey = sess.workflow_name || currentWfName || "";
+            if (wfKey) {
+              this._workflowChatCache[wfKey] = {
+                sessionId: sess.id,
+                title: sess.title,
+                messages: [...this.messages],
+              };
+            }
+            if (currentWfName && currentWfName !== wfKey) {
+              this._workflowChatCache[currentWfName] = {
+                sessionId: sess.id,
+                title: sess.title,
+                messages: [...this.messages],
+              };
+            }
+            this._isBootRestoring = true;
+            return;
+          }
+        }
       }
     } catch (e) {
       console.warn("[ComfyMate] Could not load sessions from disk:", e);
@@ -1797,9 +1800,6 @@ export class ChatUI {
             title: this.currentSessionTitle,
             messages: [...this.messages],
           };
-          this._workflowSessionMap[wfName] = this.currentSessionId;
-          this._saveWorkflowHistoryLocal(wfName, this.messages);
-          this._sanitizeWorkflowSessionMap();
         }
         return;
       }
@@ -1811,24 +1811,16 @@ export class ChatUI {
   _createNewSession() {
     const wfName = this.activeWorkflow?.name;
     if (wfName) {
-      delete this._workflowSessionMap[wfName];
-      this._clearWorkflowHistoryLocal(wfName);
       // Explicitly mark cache as clean blank session so returning to this workflow won't revive old session
       this._workflowChatCache[wfName] = {
         sessionId: null,
         title: wfName,
         messages: [],
       };
-      try {
-        localStorage.setItem("comfymate_wf_session_map", JSON.stringify(this._workflowSessionMap));
-      } catch (_) {}
     }
     this.messages = [];
     this.currentSessionId = null;
     this.currentSessionTitle = wfName || "";
-    try {
-      localStorage.removeItem("comfymate_chat_history");
-    } catch (_) {}
     const messagesContainer = this.panel?.querySelector("#cm-messages");
     if (messagesContainer) {
       messagesContainer.innerHTML = `
@@ -1926,14 +1918,11 @@ export class ChatUI {
           if (confirm(this.t("deleteSessionConfirm") || "确定要删除此会话吗？本地文件也将被清除。")) {
             try {
               await ApiClient.deleteSession(id);
-              for (const [wfK, sessId] of Object.entries(this._workflowSessionMap)) {
-                if (sessId === id) {
-                  delete this._workflowSessionMap[wfK];
+              for (const [wfK, item] of Object.entries(this._workflowChatCache)) {
+                if (item?.sessionId === id) {
                   delete this._workflowChatCache[wfK];
-                  this._clearWorkflowHistoryLocal(wfK);
                 }
               }
-              this._sanitizeWorkflowSessionMap();
 
               if (id === this.currentSessionId) {
                 this._createNewSession();

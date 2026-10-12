@@ -198,5 +198,15 @@ export const zh = {
   addNode: "添加到画布",
   nodeAddedToCanvas: "已成功添加节点 [{name}] 到画布",
   nodeAddFailed: "添加节点失败：{msg}",
+  suggestedConnection: "AI 建议连线",
+  connectNodes: "一键连线",
+  disconnectNodes: "撤回连线",
+  connectionApplied: "已连接",
+  connectionSuccess: "已成功连接节点端口",
+  connectionFailed: "连线失败：{msg}",
+  disconnectSuccess: "已撤回节点连线",
+  connectionsCount: "条连线",
+  fromSlot: "输出端口",
+  toSlot: "输入端口",
 };
 

@@ -62,26 +62,37 @@ def sanitize_session_id(session_id: str) -> Optional[str]:
 def list_sessions() -> List[Dict[str, Any]]:
     """List all saved sessions ordered by updated_at descending."""
     sessions_dir = ensure_sessions_dir()
+    local_dir = Path(__file__).resolve().parent.parent / "storage" / "sessions"
+
+    seen_ids = set()
     sessions = []
 
-    for file_path in sessions_dir.glob("*.json"):
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if not isinstance(data, dict):
-                continue
-            sess_id = data.get("id") or file_path.stem
-            messages = data.get("messages", [])
-            sessions.append({
-                "id": sess_id,
-                "title": data.get("title") or "新会话",
-                "workflow_name": data.get("workflow_name") or "",
-                "created_at": data.get("created_at") or int(file_path.stat().st_ctime * 1000),
-                "updated_at": data.get("updated_at") or int(file_path.stat().st_mtime * 1000),
-                "message_count": len(messages) if isinstance(messages, list) else 0,
-            })
-        except Exception as e:
-            logger.warning(f"Failed to read session file {file_path}: {e}")
+    dirs_to_check = [sessions_dir]
+    if local_dir != sessions_dir and local_dir.is_dir():
+        dirs_to_check.append(local_dir)
+
+    for s_dir in dirs_to_check:
+        for file_path in s_dir.glob("*.json"):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if not isinstance(data, dict):
+                    continue
+                sess_id = data.get("id") or file_path.stem
+                if sess_id in seen_ids:
+                    continue
+                seen_ids.add(sess_id)
+                messages = data.get("messages", [])
+                sessions.append({
+                    "id": sess_id,
+                    "title": data.get("title") or "新会话",
+                    "workflow_name": data.get("workflow_name") or "",
+                    "created_at": data.get("created_at") or int(file_path.stat().st_ctime * 1000),
+                    "updated_at": data.get("updated_at") or int(file_path.stat().st_mtime * 1000),
+                    "message_count": len(messages) if isinstance(messages, list) else 0,
+                })
+            except Exception as e:
+                logger.warning(f"Failed to read session file {file_path}: {e}")
 
     # Sort descending by updated_at
     sessions.sort(key=lambda s: s.get("updated_at", 0), reverse=True)
@@ -209,6 +220,15 @@ def save_session(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     _atomic_write_json(target, session_record)
+
+    local_dir = Path(__file__).resolve().parent.parent / "storage" / "sessions"
+    if sessions_dir != local_dir:
+        try:
+            local_target = local_dir / f"{safe_id}.json"
+            _atomic_write_json(local_target, session_record)
+        except Exception:
+            pass
+
     return session_record
 
 

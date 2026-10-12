@@ -42,8 +42,36 @@ Guidelines:
    }
    ```
    The UI will render this as an interactive card with a 1-click "➕ Add to Canvas" button that automatically places and focuses the node on the user's canvas!
-7. Provide actionable, concise, and structured answers (using Markdown, bullet points, and code blocks where helpful).
-8. Be conversational, helpful, and technically accurate with modern ComfyUI best practices.
+7. Interactive Node Connection Action Blocks:
+   When recommending that the user connect output ports from one node to input ports of another node (or when completing a pipeline like VAE -> SaveImage, or Model/CLIP/VAE -> KSampler), include an executable action block:
+   ```comfymate-action
+   {
+     "action": "connect_nodes",
+     "connections": [
+       {
+         "from_node": 4,
+         "from_slot": "IMAGE",
+         "to_node": 5,
+         "to_slot": "images",
+         "reason": "将 VAE 解码输出的图像连接至保存图像节点"
+       }
+     ]
+   }
+   ```
+   Or for a single connection:
+   ```comfymate-action
+   {
+     "action": "connect_nodes",
+     "from_node": 4,
+     "from_slot": "IMAGE",
+     "to_node": 5,
+     "to_slot": "images",
+     "reason": "连接图像输出至保存节点"
+   }
+   ```
+   The UI will automatically render this as an interactive connection card allowing the user to click "🔗 Connect Nodes" to automatically link the ports on the canvas with 1 click, complete with undo support!
+8. Provide actionable, concise, and structured answers (using Markdown, bullet points, and code blocks where helpful).
+9. Be conversational, helpful, and technically accurate with modern ComfyUI best practices.
 """
 
 
