@@ -2,6 +2,18 @@
 
 [ English | [简体中文](README_CN.md) ]
 
+<p align="center">
+  <img src="docs/assets/icon_orb.png" width="120" alt="ComfyMate Logo" />
+</p>
+
+<p align="center">
+  <b>Embedded AI Copilot for ComfyUI — Understands canvas topology, diagnoses runtime errors, and recommends parameters.</b>
+</p>
+
+<p align="center">
+  <img src="docs/assets/copilot_panel.png" width="100%" alt="ComfyMate Panel" />
+</p>
+
 > **ComfyMate is an embedded AI copilot that truly understands your ComfyUI workflow.**  
 > Effortlessly inspect canvas topology, understand complex node configurations, and troubleshoot runtime errors in real time without leaving ComfyUI.
 
@@ -16,6 +28,7 @@ Most AI chat plugins simply open a detached LLM window where you have to manuall
 - 🎯 **Selected Node Focus**: Click any node on the canvas, and ComfyMate immediately isolates its inputs, outputs, and parameters.
 - 🔍 **Click-to-Locate & Visual Pulsing**: Click interactive node badges (`Node #3 [KSampler]`) in chat to automatically pan, center, and highlight the node on canvas with a pulsing blue outline.
 - ⚡ **One-Click Parameter Apply & Undo**: AI-recommended parameters are rendered as interactive action cards. Apply changes to LiteGraph widgets with a single click, with instant rollback support.
+- 💡 **Node Knowledge Base & 1-Click Placement**: Grounded with official node specifications (inputs, types, ranges); recommends nodes with a 1-click "➕ Add to Canvas" button.
 - 🩺 **Workflow Doctor**: Pre-run static graph health check detecting disconnected inputs, unlinked VAE/CLIP ports, invalid dimensions, empty prompts, and orphan nodes.
 - 🖼️ **Multimodal Vision Chat**: Paste images directly from clipboard (`Cmd+V` / `Ctrl+V`) or drag & drop screenshots to ask AI about generated results, error popups, or node setups.
 - 💾 **Update-Safe Persistent Storage**: Configurations, conversations, and attachments automatically persist in ComfyUI's standard user directory (`ComfyUI/user/default/comfymate/`), completely immune to updates, re-clones, or registry reinstalls.
@@ -46,6 +59,11 @@ ComfyMate can be installed directly from the official [Comfy Registry](https://r
 comfy node registry-install comfymate
 ```
 Or search for `ComfyMate` in ComfyUI Nodes Manager / ComfyUI-Manager, click **Install**, and restart ComfyUI.  
+
+<p align="center">
+  <img src="docs/assets/nodes_manager.png" width="90%" alt="ComfyUI Nodes Manager" />
+</p>
+
 > For publishing instructions, refer to the [Publishing Guide](docs/PUBLISHING.md).
 
 ---
@@ -74,6 +92,11 @@ You can open the ComfyMate panel at any time using any of the following methods:
 
 1. Open ComfyMate and click the **⚙️ Settings** icon in the top header (or click the settings button in the welcome message).
 2. Choose either a **Local Model** (private & free) or a **Cloud API**:
+
+<p align="center">
+  <img src="docs/assets/model_settings_list.png" width="48%" alt="Model Providers Management" />
+  <img src="docs/assets/provider_config_detect.png" width="48%" alt="Auto Detect Models" />
+</p>
 
 #### A. Local LLM (Ollama / LM Studio) — Recommended for Privacy
 - **Ollama**:
@@ -133,11 +156,17 @@ When a workflow execution fails:
    - CUDA out-of-memory or custom node version conflicts
    - Clear, step-by-step instructions on how to resolve the issue.
 
-#### Scenario D: Workflow Modification & Expansion Guidance
+#### Scenario D: Workflow Modification & Node Recommendation (v0.3.0)
 Looking to enhance your generation pipeline:
 - *"How can I convert this Text-to-Image workflow into an Image-to-Image workflow?"*
 - *"Where should I insert an IP-Adapter or ControlNet node in this setup?"*
-- *"How do I add a Hi-Res Fix / Ultimate SD Upscale step?"*
+- *"How do I add a Hi-Res Fix / upscale step to this workflow?"*
+
+ComfyMate analyzes the current pipeline topology, derives upstream/downstream data flow, and recommends matching nodes with interactive **1-Click "➕ Add to Canvas"** buttons:
+
+<p align="center">
+  <img src="docs/assets/node_analysis_dataflow.png" width="70%" alt="Node Recommendation & Data Flow" />
+</p>
 
 #### Scenario E: Multimodal Clipboard & Screenshot Chat
 Got an artifact in your output image or an error popup?
@@ -208,11 +237,13 @@ In the **⚙️ Settings &rarr; General** tab, you can customize:
   - 🩺 Workflow Doctor: Pre-run static graph health check & missing link detection
   - 💾 Update-safe persistent storage under ComfyUI user directory (`user/default/comfymate/`)
   - 🧩 Component-based HTML template separation & dynamic i18n compilation
-- [ ] **v0.3.0 (Knowledge & RAG)**:
-  - Built-in documentation indexing for core ComfyUI nodes & popular custom nodes
-  - Community node library lookup & recommended templates
+- [x] **v0.3.0 (Knowledge Base & Node Recommendation)**:
+  - 📚 Live ComfyUI runtime node introspection & offline fallback knowledge base
+  - 🛡️ Elimination of LLM parameter hallucinations via official input/output specification grounding
+  - 💡 Interactive `recommend_nodes` cards with 1-click "➕ Add to Canvas" button
+  - 🎯 Intelligent node placement (adjacent to selection or centered) with visual highlight pulse
 - [ ] **v0.4.0 (Autonomous Workflow Agent)**:
-  - AI-assisted node placement, parameter adjustment, and auto-wiring
+  - AI-assisted node parameter auto-tuning and wiring
   - One-click workflow layout tidying & sub-graph optimization
   - Closed-loop generation, multimodal output evaluation, and iterative parameter tuning
 

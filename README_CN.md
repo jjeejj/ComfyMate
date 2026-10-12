@@ -2,6 +2,18 @@
 
 [ [English](README.md) | 简体中文 ]
 
+<p align="center">
+  <img src="docs/assets/icon_orb.png" width="120" alt="ComfyMate 图标" />
+</p>
+
+<p align="center">
+  <b>深度嵌入 ComfyUI 画布的 AI 智能副驾驶 — 感知工作流拓扑、秒级排查报错、一键参数调优与节点推荐。</b>
+</p>
+
+<p align="center">
+  <img src="docs/assets/copilot_panel.png" width="100%" alt="ComfyMate 侧边栏主面板" />
+</p>
+
 > **ComfyMate 是一个深度嵌入 ComfyUI 画布、真正懂工作流上下文的 AI 智能助手。**  
 > 无需离开 ComfyUI 界面，即可实时感知画布拓扑、深度解析节点连接与参数含义、秒级一键排查运行时报错。
 
@@ -16,6 +28,7 @@
 - 🎯 **选中节点精准聚焦**：在画板中点击任意节点，ComfyMate 立即捕获该节点及其上下游所有输入输出，有针对性地回答细节。
 - 🔍 **节点点击直达与脉冲高亮**：对话中提及的节点标签（如 `Node #3 [KSampler]`）均可交互点击。点击后画布镜头自动平移居中并附带 3 级高亮脉冲动画，在几百个节点的复杂画布中秒速定位。
 - ⚡ **一键应用参数调优与撤销**：大模型给出的参数优化建议直接渲染为交互操作卡片，点击「⚡ 一键应用」即可将参数精准填入对应节点 Widget，并支持随时「↩️ 撤回」恢复先前数值。
+- 💡 **动态节点知识库与一键上画布**：实时自省已安装节点定义与参数取值范围，大模型提供精准节点推荐卡片，一键「➕ 添加到画布」自动排布与脉冲聚焦。
 - 🩺 **工作流健康体检 (Workflow Doctor)**：一键对画布执行静态拓扑与连线质检，在排队出图前自动侦测核心连线缺失、空提示词、非标 Latent 尺寸及浮动孤立节点。
 - 🖼️ **多模态视觉直连 (Vision)**：支持直接从剪贴板粘贴（`Cmd+V` / `Ctrl+V`）或拖拽图片到输入框，与 AI 探讨生图效果对比、节点配置截图或报错图像。
 - 💾 **零丢失持久化存储 (Update-Safe)**：配置信息、对话历史与图片附件自动落盘至 ComfyUI 官方标准用户目录（`ComfyUI/user/default/comfymate/`），插件更新、重新拉取代码或 Registry 重装均 100% 保留配置与历史记录。
@@ -46,6 +59,11 @@ ComfyMate 支持通过现代官方 [Comfy Registry](https://registry.comfy.org) 
 comfy node registry-install comfymate
 ```
 在 ComfyUI 官方 Nodes Manager / ComfyUI-Manager 搜索框输入 `ComfyMate`，点击 **Install** 即可。  
+
+<p align="center">
+  <img src="docs/assets/nodes_manager.png" width="90%" alt="ComfyUI 官方节点市场安装" />
+</p>
+
 > 详细发布与维护指南请参阅 [发布文档 (Publishing Guide)](docs/PUBLISHING.md)。
 
 ---
@@ -73,6 +91,11 @@ ComfyMate 设计追求极致的顺手与零心智负担。以下是完整的使�
 ### 2. 快速上手：配置 LLM 模型
 
 首次使用时，点击面板顶部的 **⚙️ 设置图标**（或欢迎气泡中的“前往配置”按钮）：
+
+<p align="center">
+  <img src="docs/assets/model_settings_list.png" width="48%" alt="模型提供商列表与切换" />
+  <img src="docs/assets/provider_config_detect.png" width="48%" alt="自动拉取已部署模型与测试" />
+</p>
 
 #### 选项 A：本地模型 (Ollama / LM Studio) —— 推荐（私密、免费）
 - **Ollama**：
@@ -130,11 +153,17 @@ ComfyMate 设计追求极致的顺手与零心智负担。以下是完整的使�
    - 导致错误的根本原因（例如：模型权重文件缺失、张量分辨率不兼容、VAE 格式不匹配、未连线的必要输入端口、显存超限等）；
    - 具体一步一步的修复步骤。
 
-#### 场景 4：改造与扩展工作流建议
-想要给现有工作流添加新能力：
+#### 场景 4：改造与扩展工作流建议与智能节点推荐 (v0.3.0)
+想要给现有工作流添加新能力？例如：
 - *“我想把这个文生图工作流改成图生图，需要替换或增加哪些节点？”*
-- *“我想给这个人物生图加上 Face Detailer 面部重绘，应该怎么连线？”*
-- *“如何在这个工作流里串联放大算法（Hi-Res Fix）？”*
+- *“我想给这个生图工作流加上高清放大（Upscale / Hi-Res Fix），应该怎么连线？”*
+- *“我想给人物生图加上 Face Detailer 面部重绘，应该怎么连线？”*
+
+ComfyMate 会根据当前画布拓扑推导数据流向，给出精准节点推荐卡片，并支持 **一键「➕ 添加到画布」** 与自动居中高亮：
+
+<p align="center">
+  <img src="docs/assets/node_analysis_dataflow.png" width="70%" alt="节点推荐与数据流向推导" />
+</p>
 
 #### 场景 5：剪贴板图片多模态直接对话
 遇到生图瑕疵、复杂节点参数配置或界面错误：
@@ -205,12 +234,14 @@ ComfyMate 设计追求极致的顺手与零心智负担。以下是完整的使�
   - 🩺 工作流体检 (Workflow Doctor)：执行前静态连线校验、尺寸检测与空提示词拦截
   - 💾 用户目录零丢失持久化存储 (`ComfyUI/user/default/comfymate/`)
   - 🧩 前端组件 HTML 模板化分离与动态 i18n 渲染引擎
-- [ ] **v0.3.0 (知识库与 RAG 检索)**：
-  - 官方核心节点与主流 Custom Nodes 文档深度索引
-  - 社区高质量节点库与使用范例检索
+- [x] **v0.3.0 (知识库与节点推荐上画布)**：
+  - 📚 ComfyUI 运行时节点全量动态自省与离线兜底知识库
+  - 🛡️ 官方输入输出与参数范围元数据注入，消除大模型幻觉
+  - 💡 交互式节点推荐卡片与一键「➕ 添加到画布」
+  - 🎯 智能自动排布（选区右侧或视口居中）与淡蓝发光聚焦脉冲
 - [ ] **v0.4.0 (自主工作流 Agent)**：
-  - AI 辅助一键添加节点、自动连线与子图封装
-  - 智能整理画布节点排版
+  - AI 辅助参数自动微调与智能自动连线
+  - 一键智能整理画布节点排版与子图封装
   - 自动执行测试生图、多模态结果反思评价与循环调参
 
 ---
