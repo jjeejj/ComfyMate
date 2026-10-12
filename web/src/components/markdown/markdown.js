@@ -237,46 +237,90 @@ export function renderMarkdown(text, t = (k) => k) {
     const isJsonAction =
       (item.lang === "json" || !item.lang || item.lang === "text") &&
       item.code.includes('"action"') &&
-      item.code.includes('"set_parameters"');
+      (item.code.includes('"set_parameters"') || item.code.includes('"recommend_nodes"'));
 
     if (isActionLang || isJsonAction) {
       try {
         const parsed = JSON.parse(item.code);
-        const rawNodeId = parseInt(parsed?.node_id, 10);
-        if (parsed && parsed.action === "set_parameters" && !isNaN(rawNodeId)) {
-          const nodeId = rawNodeId;
-          const params = (parsed.parameters && typeof parsed.parameters === "object") ? parsed.parameters : {};
-          const reason = parsed.reason || "";
-          const paramsJsonStr = encodeURIComponent(JSON.stringify(params));
-          const reasonEsc = escapeHtml(reason);
+        if (parsed && parsed.action === "set_parameters") {
+          const rawNodeId = parseInt(parsed?.node_id, 10);
+          if (!isNaN(rawNodeId)) {
+            const nodeId = rawNodeId;
+            const params = (parsed.parameters && typeof parsed.parameters === "object") ? parsed.parameters : {};
+            const reason = parsed.reason || "";
+            const paramsJsonStr = encodeURIComponent(JSON.stringify(params));
+            const reasonEsc = escapeHtml(reason);
 
-          const paramRows = Object.entries(params)
-            .map(([k, v]) => {
-              const kEsc = escapeHtml(k);
-              const vEsc = escapeHtml(v);
-              return `<div class="cm-action-param-row"><span class="cm-action-param-key">${kEsc}:</span> <span class="cm-action-param-val">${vEsc}</span></div>`;
-            })
-            .join("");
+            const paramRows = Object.entries(params)
+              .map(([k, v]) => {
+                const kEsc = escapeHtml(k);
+                const vEsc = escapeHtml(v);
+                return `<div class="cm-action-param-row"><span class="cm-action-param-key">${kEsc}:</span> <span class="cm-action-param-val">${vEsc}</span></div>`;
+              })
+              .join("");
+
+            const cardHtml = `
+              <div class="cm-action-card" data-action="set_parameters" data-node-id="${nodeId}" data-params="${paramsJsonStr}">
+                <div class="cm-action-header">
+                  <div class="cm-action-title">
+                    <span class="cm-action-icon">⚡</span>
+                    <span>${t("suggestedAction") || "AI 建议参数调整"}</span>
+                  </div>
+                  <button class="cm-action-btn-locate" type="button" data-node-id="${nodeId}" title="${t("locateNode") || "在画布中定位节点"}">
+                    <span>📍</span> <span>Node #${nodeId}</span>
+                  </button>
+                </div>
+                <div class="cm-action-body">
+                  <div class="cm-action-params">${paramRows}</div>
+                  ${reasonEsc ? `<div class="cm-action-reason">${reasonEsc}</div>` : ""}
+                </div>
+                <div class="cm-action-footer">
+                  <button class="cm-action-btn cm-action-btn-apply" type="button" data-node-id="${nodeId}" data-params="${paramsJsonStr}">
+                    <span>▶️</span> <span>${t("applyParams") || "应用到画布"}</span>
+                  </button>
+                </div>
+              </div>
+            `;
+            html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
+            return;
+          }
+        } else if (parsed && parsed.action === "recommend_nodes" && Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
+          const nodesList = parsed.nodes;
+          const nodeItems = nodesList.map((n) => {
+            const typeEsc = escapeHtml(n.type || "");
+            const titleEsc = escapeHtml(n.title || n.type || "Node");
+            const reasonEsc = escapeHtml(n.reason || "");
+            const encodedType = encodeURIComponent(n.type || "");
+            return `
+              <div class="cm-node-rec-item">
+                <div class="cm-node-rec-info">
+                  <div class="cm-node-rec-name">
+                    <span class="cm-node-rec-icon">🧩</span>
+                    <span class="cm-node-rec-title">${titleEsc}</span>
+                    <span class="cm-node-rec-type">(${typeEsc})</span>
+                  </div>
+                  ${reasonEsc ? `<div class="cm-node-rec-reason">${reasonEsc}</div>` : ""}
+                </div>
+                <button class="cm-node-rec-btn-add" type="button" data-node-type="${encodedType}" title="${t("addNodeToCanvas") || "添加到画布"}">
+                  <span>➕</span> <span>${t("addNode") || "添加到画布"}</span>
+                </button>
+              </div>
+            `;
+          }).join("");
 
           const cardHtml = `
-            <div class="cm-action-card" data-action="set_parameters" data-node-id="${nodeId}" data-params="${paramsJsonStr}">
+            <div class="cm-action-card cm-node-rec-card" data-action="recommend_nodes">
               <div class="cm-action-header">
                 <div class="cm-action-title">
-                  <span class="cm-action-icon">⚡</span>
-                  <span>${t("suggestedAction") || "AI 建议参数调整"}</span>
+                  <span class="cm-action-icon">💡</span>
+                  <span>${t("recommendedNodes") || "AI 推荐节点"}</span>
                 </div>
-                <button class="cm-action-btn-locate" type="button" data-node-id="${nodeId}" title="${t("locateNode") || "在画布中定位节点"}">
-                  <span>📍</span> <span>Node #${nodeId}</span>
-                </button>
+                <span class="cm-node-rec-count">${nodesList.length} ${t("nodesCount") || "个节点"}</span>
               </div>
               <div class="cm-action-body">
-                <div class="cm-action-params">${paramRows}</div>
-                ${reasonEsc ? `<div class="cm-action-reason">${reasonEsc}</div>` : ""}
-              </div>
-              <div class="cm-action-footer">
-                <button class="cm-action-btn cm-action-btn-apply" type="button" data-node-id="${nodeId}" data-params="${paramsJsonStr}">
-                  <span>▶️</span> <span>${t("applyParams") || "应用到画布"}</span>
-                </button>
+                <div class="cm-node-rec-list">
+                  ${nodeItems}
+                </div>
               </div>
             </div>
           `;

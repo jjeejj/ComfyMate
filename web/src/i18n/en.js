@@ -192,5 +192,11 @@ export const en = {
   syncWorkflowChatLabel: "Dedicated Chat per Canvas Workflow (Recommended)",
   syncWorkflowChatDesc: "Seamlessly auto-switch chat history when switching ComfyUI canvas tabs for focused assistance",
   currentCanvasTag: "Current Canvas",
+  recommendedNodes: "Recommended Nodes",
+  nodesCount: "node(s)",
+  addNodeToCanvas: "Add this node to canvas",
+  addNode: "Add to Canvas",
+  nodeAddedToCanvas: "Successfully added node [{name}] to canvas",
+  nodeAddFailed: "Failed to add node: {msg}",
 };
 

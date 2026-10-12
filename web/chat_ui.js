@@ -615,6 +615,24 @@ export class ChatUI {
         this.sendMessage(prompt);
         return;
       }
+
+      // 7. Recommended Nodes Card: Add Node to Canvas button
+      const addNodeBtn = e.target.closest(".cm-node-rec-btn-add");
+      if (addNodeBtn) {
+        const rawNodeType = addNodeBtn.getAttribute("data-node-type");
+        const nodeType = decodeURIComponent(rawNodeType || "");
+        if (nodeType) {
+          const res = this.actions.addNodeToCanvas(nodeType);
+          if (res.success) {
+            addNodeBtn.classList.add("cm-added");
+            addNodeBtn.innerHTML = `<span>✅</span> <span>${this.t("actionApplied") || "已添加"}</span>`;
+            Toast.success(this.t("nodeAddedToCanvas", { name: res.nodeTitle }));
+          } else {
+            Toast.error(this.t("nodeAddFailed", { msg: res.message || "Failed to add node" }));
+          }
+        }
+        return;
+      }
     });
   }
 

@@ -3,6 +3,7 @@ Comprehensive unit tests for ComfyMate backend (config, context, llm, server).
 """
 
 import asyncio
+import json
 import os
 import sys
 
@@ -217,6 +218,51 @@ def test_session_persistence():
         delete_session("test_sess_001")
 
 
+def test_node_knowledge_api_handlers():
+    import asyncio
+    from unittest.mock import MagicMock
+    import py.server as srv
+
+    class DummyWeb:
+        @staticmethod
+        def json_response(data, status=200):
+            res = MagicMock()
+            res.status = status
+            res.body = json.dumps(data).encode("utf-8")
+            return res
+
+    original_web = srv.web
+    srv.web = DummyWeb
+    try:
+        async def _run():
+            # Test search
+            req_search = MagicMock()
+            req_search.query = {"q": "sampler", "limit": "5"}
+            res = await srv.handle_search_nodes(req_search)
+            data = json.loads(res.body.decode())
+            assert data["status"] == "ok"
+            assert any(n["class_name"] == "KSampler" for n in data["nodes"])
+
+            # Test info
+            req_info = MagicMock()
+            req_info.query = {"type": "KSampler"}
+            res_info = await srv.handle_get_node_info(req_info)
+            data_info = json.loads(res_info.body.decode())
+            assert data_info["status"] == "ok"
+            assert data_info["node"]["class_name"] == "KSampler"
+
+            # Test info not found
+            req_info_404 = MagicMock()
+            req_info_404.query = {"type": "NonExistentNode123"}
+            res_404 = await srv.handle_get_node_info(req_info_404)
+            assert res_404.status == 404
+
+        asyncio.run(_run())
+        print("✅ Node knowledge API endpoints test passed!")
+    finally:
+        srv.web = original_web
+
+
 if __name__ == "__main__":
     test_system_prompt_customization()
     test_config_operations()
@@ -225,5 +271,6 @@ if __name__ == "__main__":
     test_rich_context_extraction()
     test_attachment_storage_and_resolution()
     test_session_persistence()
+    test_node_knowledge_api_handlers()
 
 

@@ -192,5 +192,11 @@ export const zh = {
   syncWorkflowChatLabel: "每个画布对应专属对话 (推荐)",
   syncWorkflowChatDesc: "切换 ComfyUI 画布标签页时自动切换到该画布的历史对话，提问更专注精准",
   currentCanvasTag: "当前画布",
+  recommendedNodes: "AI 推荐节点",
+  nodesCount: "个节点",
+  addNodeToCanvas: "添加此节点到画布",
+  addNode: "添加到画布",
+  nodeAddedToCanvas: "已成功添加节点 [{name}] 到画布",
+  nodeAddFailed: "添加节点失败：{msg}",
 };
 

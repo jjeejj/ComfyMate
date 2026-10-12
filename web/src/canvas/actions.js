@@ -422,6 +422,87 @@ export class CanvasActionManager {
   }
 
   /**
+   * Add a new node to the canvas by node type.
+   * Places it intelligently (adjacent to selected node or centered in view),
+   * adds it to the graph, selects it, and pulses it with highlight animation.
+   */
+  addNodeToCanvas(nodeType, options = {}) {
+    if (!nodeType) {
+      return { success: false, message: "Node type is required" };
+    }
+
+    const graph = this.app?.graph;
+    const canvas = this.app?.canvas;
+    const LiteGraph = window.LiteGraph;
+
+    if (!graph || !LiteGraph) {
+      return { success: false, message: "ComfyUI LiteGraph canvas not available" };
+    }
+
+    // Create node instance via LiteGraph
+    let node = null;
+    try {
+      node = LiteGraph.createNode(nodeType);
+    } catch (e) {
+      console.error(`[ComfyMate] Failed to instantiate node '${nodeType}':`, e);
+    }
+
+    if (!node) {
+      return { success: false, message: `Node type '${nodeType}' is not installed or registered in ComfyUI` };
+    }
+
+    // Determine target position
+    let targetX = 100;
+    let targetY = 100;
+
+    // Check if there is an active selected node to place alongside
+    const selectedNodes = canvas?.selected_nodes ? Object.values(canvas.selected_nodes) : [];
+    const refNode = selectedNodes.length > 0 ? selectedNodes[selectedNodes.length - 1] : null;
+
+    if (refNode && Array.isArray(refNode.pos)) {
+      const refW = Array.isArray(refNode.size) ? refNode.size[0] : 200;
+      targetX = refNode.pos[0] + refW + 60;
+      targetY = refNode.pos[1];
+    } else if (canvas?.ds) {
+      // Center in current viewport
+      const scale = canvas.ds.scale || 1;
+      const canvasEl = canvas.canvas;
+      const w = canvasEl?.width || window.innerWidth;
+      const h = canvasEl?.height || window.innerHeight;
+      const offsetX = canvas.ds.offset?.[0] || 0;
+      const offsetY = canvas.ds.offset?.[1] || 0;
+
+      targetX = (w / 2) / scale - offsetX - (Array.isArray(node.size) ? node.size[0] / 2 : 100);
+      targetY = (h / 2) / scale - offsetY - (Array.isArray(node.size) ? node.size[1] / 2 : 50);
+    }
+
+    node.pos = [Math.round(targetX), Math.round(targetY)];
+
+    try {
+      graph.add(node);
+    } catch (e) {
+      console.error("[ComfyMate] Error adding node to graph:", e);
+      return { success: false, message: `Failed to add node to graph: ${e.message}` };
+    }
+
+    // If options.parameters provided, apply them
+    if (options.parameters && typeof options.parameters === "object") {
+      this.applyParameters(node.id, options.parameters);
+    }
+
+    // Focus, select, and pulse on the newly created node
+    this.locateNode(node.id, true);
+
+    return {
+      success: true,
+      nodeId: node.id,
+      nodeType: node.type || nodeType,
+      nodeTitle: node.title || node.type || nodeType,
+      node,
+    };
+  }
+
+  /**
    * Inspect current workflow topology and parameters for common pitfalls:
    * 1. Missing required connections on essential nodes (KSampler, VAE, CLIP)
    * 2. Empty prompts on text encoders

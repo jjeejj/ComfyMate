@@ -1,5 +1,10 @@
 from typing import Any, Dict, List, Optional
 
+try:
+    from .node_knowledge import get_node_info, format_node_spec_markdown
+except ImportError:
+    from py.node_knowledge import get_node_info, format_node_spec_markdown
+
 SYSTEM_PROMPT = """You are ComfyMate, an expert AI assistant embedded directly inside ComfyUI.
 Your mission is to help the user understand, troubleshoot, inspect, and optimize their ComfyUI workflow.
 
@@ -22,8 +27,23 @@ Guidelines:
    }
    ```
    The UI will automatically render this as an interactive card allowing the user to click "Apply to Canvas" to write values directly into the LiteGraph node widgets!
-6. Provide actionable, concise, and structured answers (using Markdown, bullet points, and code blocks where helpful).
-7. Be conversational, helpful, and technically accurate with modern ComfyUI best practices.
+6. Interactive Node Recommendation Action Blocks:
+   When recommending nodes that the user should add to their workflow (e.g. adding LoRA, ControlNet, Upscaler, Face Detailer, etc.), include an executable action block:
+   ```comfymate-action
+   {
+     "action": "recommend_nodes",
+     "nodes": [
+       {
+         "type": "ControlNetApplyAdvanced",
+         "title": "Apply ControlNet (Advanced)",
+         "reason": "用于将姿态骨骼或深度引导图应用到当前采样流程"
+       }
+     ]
+   }
+   ```
+   The UI will render this as an interactive card with a 1-click "➕ Add to Canvas" button that automatically places and focuses the node on the user's canvas!
+7. Provide actionable, concise, and structured answers (using Markdown, bullet points, and code blocks where helpful).
+8. Be conversational, helpful, and technically accurate with modern ComfyUI best practices.
 """
 
 
@@ -56,10 +76,12 @@ def format_context_block(context: Optional[Dict[str, Any]]) -> str:
 
     # 1. Error Information
     error_info = context.get("error_info")
+    error_node_type = None
     if error_info:
         parts.append("### 🚨 Runtime Error Detected")
         node_id = error_info.get("node_id", "Unknown")
         node_type = error_info.get("node_type", "Unknown")
+        error_node_type = node_type
         exception_type = error_info.get("exception_type", "Error")
         message = error_info.get("message", "")
         traceback_str = error_info.get("traceback", "")
@@ -69,8 +91,11 @@ def format_context_block(context: Optional[Dict[str, Any]]) -> str:
         if traceback_str:
             parts.append(f"```text\n{traceback_str.strip()}\n```")
 
-    # 2. Selected Nodes Focus
+    # 2. Selected Nodes Focus & Specifications
     selected_nodes = context.get("selected_nodes", [])
+    relevant_specs = []
+    seen_spec_types = set()
+
     if selected_nodes:
         parts.append("### 🎯 Currently Selected Node(s) Focus")
         for node in selected_nodes:
@@ -89,6 +114,23 @@ def format_context_block(context: Optional[Dict[str, Any]]) -> str:
                 parts.append(f"  - Upstream Inputs: `{inputs}`")
             if outputs:
                 parts.append(f"  - Downstream Outputs: `{outputs}`")
+
+            if ntype and ntype not in seen_spec_types:
+                spec = get_node_info(ntype)
+                if spec:
+                    relevant_specs.append(format_node_spec_markdown(spec))
+                    seen_spec_types.add(ntype)
+
+    # Include spec for crashing node if known and not already added
+    if error_node_type and error_node_type not in seen_spec_types:
+        spec = get_node_info(error_node_type)
+        if spec:
+            relevant_specs.append(format_node_spec_markdown(spec))
+            seen_spec_types.add(error_node_type)
+
+    if relevant_specs:
+        parts.append("### 📚 Official Node Specifications (Ground Truth)")
+        parts.extend(relevant_specs)
 
     # 3. Overall Workflow Summary
     workflow_summary = context.get("workflow_summary")

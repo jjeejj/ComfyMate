@@ -41,6 +41,8 @@ def test_context_formatting():
     assert "Node #3 [KSampler]" in formatted
     assert "Sizes of tensors must match" in formatted
     assert "Total Nodes: 4" in formatted
+    assert "Official Node Specifications" in formatted
+    assert "KSampler" in formatted
 
     messages = [{"role": "user", "content": "为什么报错了？"}]
     final_msgs = prepare_messages(messages, context=mock_context)
@@ -69,7 +71,32 @@ def test_system_prompt_actions():
     print("✅ System prompt action instructions test passed!")
 
 
+def test_node_knowledge():
+    from py.node_knowledge import get_node_info, search_nodes, get_all_registered_nodes
+    
+    # Check all registered nodes returns at least baseline
+    all_nodes = get_all_registered_nodes()
+    assert len(all_nodes) >= 10
+    assert "KSampler" in all_nodes
+    assert "CheckpointLoaderSimple" in all_nodes
+
+    # Check get_node_info
+    ksampler = get_node_info("KSampler")
+    assert ksampler is not None
+    assert ksampler["class_name"] == "KSampler"
+    assert "inputs" in ksampler
+    assert "steps" in ksampler["inputs"]
+    assert ksampler["inputs"]["steps"]["type"] == "INT"
+
+    # Check search_nodes
+    search_res = search_nodes("lora")
+    assert any(n["class_name"] == "LoraLoader" for n in search_res)
+
+    print("✅ Node knowledge test passed!")
+
+
 if __name__ == "__main__":
     test_context_formatting()
     test_config()
     test_system_prompt_actions()
+    test_node_knowledge()

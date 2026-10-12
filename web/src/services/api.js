@@ -142,4 +142,18 @@ export class ApiClient {
     });
     return await this._handleResponse(resp, "Delete session");
   }
+
+  static async searchNodes(query = "", limit = 15, refresh = false) {
+    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    if (refresh) params.set("refresh", "1");
+    const resp = await fetch(`/comfymate/api/nodes/search?${params.toString()}`);
+    return await this._handleResponse(resp, "Search nodes");
+  }
+
+  static async getNodeInfo(nodeType, refresh = false) {
+    const params = new URLSearchParams({ type: nodeType });
+    if (refresh) params.set("refresh", "1");
+    const resp = await fetch(`/comfymate/api/nodes/info?${params.toString()}`);
+    return await this._handleResponse(resp, "Get node info");
+  }
 }

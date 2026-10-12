@@ -16,6 +16,7 @@ except ImportError:
 from .config import load_config, save_config, get_active_provider_and_model
 from .context import prepare_messages
 from .llm import LLMClient
+from .node_knowledge import get_node_info, search_nodes
 from .sessions import (
     list_sessions,
     get_session,
@@ -509,6 +510,39 @@ async def handle_delete_session(request: web.Request) -> web.Response:
         return web.json_response({"status": "error", "message": str(e)}, status=500)
 
 
+async def handle_search_nodes(request: web.Request) -> web.Response:
+    """Fuzzy search registered ComfyUI nodes."""
+    try:
+        query = request.query.get("q", "").strip()
+        limit_str = request.query.get("limit", "15")
+        force_refresh = request.query.get("refresh", "0").lower() in ("1", "true")
+        try:
+            limit = int(limit_str)
+        except ValueError:
+            limit = 15
+        results = search_nodes(query, limit=limit, force_refresh=force_refresh)
+        return web.json_response({"status": "ok", "nodes": results})
+    except Exception as e:
+        logger.error(f"Error searching nodes: {e}", exc_info=True)
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+async def handle_get_node_info(request: web.Request) -> web.Response:
+    """Retrieve node specification and parameters by node type / class name."""
+    try:
+        node_type = request.query.get("type", "").strip()
+        force_refresh = request.query.get("refresh", "0").lower() in ("1", "true")
+        if not node_type:
+            return web.json_response({"status": "error", "message": "Missing 'type' parameter"}, status=400)
+        info = get_node_info(node_type, force_refresh=force_refresh)
+        if not info:
+            return web.json_response({"status": "error", "message": f"Node type '{node_type}' not found"}, status=404)
+        return web.json_response({"status": "ok", "node": info})
+    except Exception as e:
+        logger.error(f"Error retrieving node info: {e}", exc_info=True)
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
 def register_routes(target_app: web.Application):
     """Register ComfyMate REST and SSE routes."""
     target_app.router.add_get("/comfymate/api/config", handle_get_config)
@@ -521,6 +555,8 @@ def register_routes(target_app: web.Application):
     target_app.router.add_post("/comfymate/api/sessions", handle_save_session)
     target_app.router.add_get("/comfymate/api/sessions/{session_id}", handle_get_session)
     target_app.router.add_delete("/comfymate/api/sessions/{session_id}", handle_delete_session)
+    target_app.router.add_get("/comfymate/api/nodes/search", handle_search_nodes)
+    target_app.router.add_get("/comfymate/api/nodes/info", handle_get_node_info)
     logger.info("[ComfyMate] API routes registered successfully.")
 
 
