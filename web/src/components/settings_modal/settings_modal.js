@@ -1,6 +1,6 @@
-import { renderModelsPane } from "./settings/models_pane.js";
-import { renderGeneralPane } from "./settings/general_pane.js";
-import { loadTemplate, renderTemplate } from "../utils/template_loader.js";
+import { renderModelsPane } from "./models_pane.js";
+import { renderGeneralPane } from "./general_pane.js";
+import { loadTemplate, renderTemplate } from "../../utils/template_loader.js";
 
 /**
  * Settings Modal Dialog Controller.
@@ -58,6 +58,10 @@ export class SettingsModal {
 
   switchTab(tabName) {
     this.currentTab = tabName;
+    const body = this.modalEl.querySelector("#cm-dialog-pane-body");
+    const title = this.modalEl.querySelector("#cm-pane-title");
+    const subtitle = this.modalEl.querySelector("#cm-pane-subtitle");
+
     this.modalEl.querySelectorAll(".cm-nav-item").forEach((item) => {
       if (item.getAttribute("data-tab") === tabName) {
         item.classList.add("active");
@@ -66,25 +70,20 @@ export class SettingsModal {
       }
     });
 
-    const titleEl = this.modalEl.querySelector("#cm-pane-title");
-    const subtitleEl = this.modalEl.querySelector("#cm-pane-subtitle");
-    const bodyEl = this.modalEl.querySelector("#cm-dialog-pane-body");
-
-    if (tabName === "models") {
-      titleEl.textContent = this.ctx.t("modelsTitle");
-      subtitleEl.textContent = this.ctx.t("modelsSubtitle");
-      renderModelsPane(this.ctx, bodyEl);
-    } else if (tabName === "general") {
-      titleEl.textContent = this.ctx.t("generalTitle");
-      subtitleEl.textContent = this.ctx.t("generalSubtitle");
-      renderGeneralPane(this.ctx, bodyEl);
+    if (tabName === "general") {
+      title.textContent = this.ctx.t("navGeneral");
+      subtitle.textContent = this.ctx.t("generalSubtitle");
+      renderGeneralPane(this.ctx, body);
+    } else {
+      title.textContent = this.ctx.t("modelsTitle");
+      subtitle.textContent = this.ctx.t("modelsSubtitle");
+      renderModelsPane(this.ctx, body);
     }
   }
 
-  updateText() {
-    if (!this.modalEl) return;
-    this.modalEl.querySelector("#cm-txt-set-title").textContent = this.ctx.t("settingsTitle");
-    this.modalEl.querySelector("#cm-tab-general").textContent = this.ctx.t("navGeneral");
-    this.modalEl.querySelector("#cm-tab-models").textContent = this.ctx.t("navModels");
+  refresh() {
+    if (this.isOpen()) {
+      this.switchTab(this.currentTab);
+    }
   }
 }

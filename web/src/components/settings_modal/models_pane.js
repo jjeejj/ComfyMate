@@ -1,5 +1,5 @@
 import { findPreset, getProviderDisplayName, FORMAT_PRESETS } from "../../i18n/index.js";
-import { escapeHtml } from "../../utils/toast.js";
+import { escapeHtml } from "../toast/index.js";
 
 /**
  * Render Models Settings Pane (Provider list & 3-format editor).

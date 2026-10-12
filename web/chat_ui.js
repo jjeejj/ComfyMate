@@ -1,10 +1,10 @@
 import { ContextExtractor } from "./src/canvas/extractor.js";
 import { CanvasActionManager } from "./src/canvas/actions.js";
 import { I18nManager, FORMAT_PRESETS } from "./src/i18n/index.js";
-import { renderMarkdown } from "./src/utils/markdown.js";
+import { renderMarkdown } from "./src/components/markdown/index.js";
 import { ApiClient } from "./src/services/api.js";
-import { SettingsModal } from "./src/components/settings_modal.js";
-import { Toast, escapeHtml } from "./src/utils/toast.js";
+import { SettingsModal } from "./src/components/settings_modal/index.js";
+import { Toast, escapeHtml } from "./src/components/toast/index.js";
 import { loadTemplate, renderTemplate } from "./src/utils/template_loader.js";
 
 export class ChatUI {
@@ -124,7 +124,7 @@ export class ChatUI {
     this.panel = document.createElement("div");
     this.panel.className = "comfymate-panel hidden";
 
-    const rawTemplate = await loadTemplate("./src/components/panel.html", import.meta.url);
+    const rawTemplate = await loadTemplate("./src/components/panel/panel.html", import.meta.url);
     this.panel.innerHTML = renderTemplate(rawTemplate, (k) => this.t(k));
     document.body.appendChild(this.panel);
 

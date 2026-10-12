@@ -1,0 +1,110 @@
+/* ==========================================================================
+   ComfyMate Design Tokens, Variables & Base Reset
+   ========================================================================== */
+
+:root {
+  --cm-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
+  --cm-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+
+  /* Colors */
+  --cm-bg-base: #18181c;
+  --cm-bg-panel: rgba(22, 22, 26, 0.96);
+  --cm-bg-header: rgba(30, 30, 35, 0.7);
+  --cm-bg-input: rgba(24, 24, 28, 0.95);
+  --cm-bg-card: rgba(255, 255, 255, 0.03);
+
+  --cm-border-subtle: rgba(255, 255, 255, 0.08);
+  --cm-border-default: rgba(255, 255, 255, 0.12);
+  --cm-border-focus: #3b82f6;
+
+  --cm-text-primary: #f4f4f5;
+  --cm-text-secondary: #a1a1aa;
+  --cm-text-muted: #71717a;
+
+  --cm-primary: #2563eb;
+  --cm-primary-hover: #1d4ed8;
+  --cm-primary-light: #60a5fa;
+  --cm-primary-glow: rgba(59, 130, 246, 0.35);
+
+  --cm-danger: #ef4444;
+  --cm-danger-hover: #dc2626;
+  --cm-warning: #f59e0b;
+  --cm-success: #10b981;
+
+  /* Elevation & Shadows */
+  --cm-shadow-panel: 0 20px 48px rgba(0, 0, 0, 0.7);
+  --cm-shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.85);
+  --cm-shadow-toast: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 1px rgba(255, 255, 255, 0.25);
+
+  /* Radius */
+  --cm-radius-sm: 6px;
+  --cm-radius-md: 8px;
+  --cm-radius-lg: 12px;
+  --cm-radius-xl: 16px;
+}
+
+/* --------------------------------------------------------------------------
+   Strict Box Sizing & Reset for ComfyMate Components
+   Prevents external ComfyUI styles from breaking component geometry
+   -------------------------------------------------------------------------- */
+.comfymate-panel,
+.comfymate-panel *,
+.comfymate-panel *::before,
+.comfymate-panel *::after,
+.comfymate-modal-backdrop,
+.comfymate-modal-backdrop *,
+.comfymate-modal-backdrop *::before,
+.comfymate-modal-backdrop *::after,
+.cm-sessions-overlay,
+.cm-sessions-overlay *,
+.cm-sessions-overlay *::before,
+.cm-sessions-overlay *::after,
+.cm-toast-container,
+.cm-toast-container *,
+.cm-toast-container *::before,
+.cm-toast-container *::after,
+#cm-edge-handle,
+#cm-edge-handle *,
+#cm-edge-handle *::before,
+#cm-edge-handle *::after {
+  box-sizing: border-box;
+}
+
+/* --------------------------------------------------------------------------
+   Universal Sleek Scrollbars across Windows, macOS, and Linux
+   -------------------------------------------------------------------------- */
+.comfymate-panel,
+.comfymate-panel *,
+.comfymate-modal-backdrop,
+.comfymate-modal-backdrop *,
+.cm-sessions-overlay,
+.cm-sessions-overlay * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.comfymate-panel *::-webkit-scrollbar,
+.comfymate-modal-backdrop *::-webkit-scrollbar,
+.cm-sessions-overlay *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.comfymate-panel *::-webkit-scrollbar-track,
+.comfymate-modal-backdrop *::-webkit-scrollbar-track,
+.cm-sessions-overlay *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.comfymate-panel *::-webkit-scrollbar-thumb,
+.comfymate-modal-backdrop *::-webkit-scrollbar-thumb,
+.cm-sessions-overlay *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+}
+
+.comfymate-panel *::-webkit-scrollbar-thumb:hover,
+.comfymate-modal-backdrop *::-webkit-scrollbar-thumb:hover,
+.cm-sessions-overlay *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}

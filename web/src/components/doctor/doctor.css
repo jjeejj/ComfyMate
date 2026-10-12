@@ -1,0 +1,151 @@
+/* ==========================================================================
+   ComfyMate Workflow Doctor Diagnostics Card
+   ========================================================================== */
+
+.cm-doctor-card {
+  margin: 10px 0;
+  padding: 14px;
+  background: var(--cm-bg-input, rgba(24, 24, 28, 0.95));
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: var(--cm-radius-lg, 12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cm-doctor-card.healthy {
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.cm-doctor-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--cm-border-subtle, rgba(255, 255, 255, 0.08));
+  padding-bottom: 10px;
+}
+
+.cm-doctor-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.cm-doctor-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cm-doctor-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #f4f4f5;
+}
+
+.cm-doctor-subtitle {
+  font-size: 11.5px;
+  color: var(--cm-text-secondary, #a1a1aa);
+}
+
+.cm-doctor-success-text {
+  font-size: 12.5px;
+  color: #34d399;
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
+.cm-doctor-issues-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.cm-doctor-issue-item {
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--cm-border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: var(--cm-radius-md, 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cm-doctor-issue-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cm-doctor-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.cm-doctor-badge.critical {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.cm-doctor-badge.warning {
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fde68a;
+}
+
+.cm-doctor-badge.info {
+  background: rgba(59, 130, 246, 0.18);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+}
+
+.cm-doctor-issue-msg {
+  font-size: 12px;
+  color: var(--cm-text-primary, #e4e4e7);
+  line-height: 1.45;
+}
+
+.cm-doctor-issue-fix {
+  font-size: 11.5px;
+  color: var(--cm-text-secondary, #a1a1aa);
+  line-height: 1.4;
+  padding-left: 6px;
+  border-left: 2px solid rgba(59, 130, 246, 0.4);
+}
+
+.cm-doctor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.cm-doctor-btn-ask-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--cm-radius-sm, 6px);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+}
+
+.cm-doctor-btn-ask-ai:hover {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
+  transform: translateY(-1px);
+}
