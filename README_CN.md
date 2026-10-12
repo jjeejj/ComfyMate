@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/copilot_panel.png" width="100%" alt="ComfyMate 侧边栏主面板" />
+  <img src="docs/assets/copilot_panel_zh.png" width="100%" alt="ComfyMate 侧边栏主面板" />
 </p>
 
 > **ComfyMate 是一个深度嵌入 ComfyUI 画布、真正懂工作流上下文的 AI 智能助手。**  
@@ -93,8 +93,13 @@ ComfyMate 设计追求极致的顺手与零心智负担。以下是完整的使�
 首次使用时，点击面板顶部的 **⚙️ 设置图标**（或欢迎气泡中的“前往配置”按钮）：
 
 <p align="center">
-  <img src="docs/assets/model_settings_list.png" width="48%" alt="模型提供商列表与切换" />
-  <img src="docs/assets/provider_config_detect.png" width="48%" alt="自动拉取已部署模型与测试" />
+  <img src="docs/assets/model_settings_list_zh.png" width="85%" alt="模型提供商列表与切换" />
+</p>
+
+点击对应服务商的 **编辑**（或下方 **+ 添加模型提供商**），输入 Base URL 与 API Key，并使用 **一键自动拉取已部署模型** 快速同步可用模型：
+
+<p align="center">
+  <img src="docs/assets/provider_config_detect_zh.png" width="85%" alt="自动拉取已部署模型与测试" />
 </p>
 
 #### 选项 A：本地模型 (Ollama / LM Studio) —— 推荐（私密、免费）
@@ -162,7 +167,7 @@ ComfyMate 设计追求极致的顺手与零心智负担。以下是完整的使�
 ComfyMate 会根据当前画布拓扑推导数据流向，给出精准节点推荐卡片，并支持 **一键「➕ 添加到画布」** 与自动居中高亮：
 
 <p align="center">
-  <img src="docs/assets/node_analysis_dataflow.png" width="70%" alt="节点推荐与数据流向推导" />
+  <img src="docs/assets/node_analysis_dataflow_zh.png" width="85%" alt="节点推荐与数据流向推导" />
 </p>
 
 #### 场景 5：剪贴板图片多模态直接对话

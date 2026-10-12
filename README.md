@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/copilot_panel.png" width="100%" alt="ComfyMate Panel" />
+  <img src="docs/assets/copilot_panel_en.png" width="100%" alt="ComfyMate Panel" />
 </p>
 
 > **ComfyMate is an embedded AI copilot that truly understands your ComfyUI workflow.**  
@@ -94,8 +94,13 @@ You can open the ComfyMate panel at any time using any of the following methods:
 2. Choose either a **Local Model** (private & free) or a **Cloud API**:
 
 <p align="center">
-  <img src="docs/assets/model_settings_list.png" width="48%" alt="Model Providers Management" />
-  <img src="docs/assets/provider_config_detect.png" width="48%" alt="Auto Detect Models" />
+  <img src="docs/assets/model_settings_list_en.png" width="85%" alt="Model Providers Management" />
+</p>
+
+3. Click **Edit** (or **+ Add Model Provider**) to configure your endpoint Base URL and API key, and use **Auto-Detect Models** to sync deployed models with one click:
+
+<p align="center">
+  <img src="docs/assets/provider_config_detect_en.png" width="85%" alt="Auto Detect Models" />
 </p>
 
 #### A. Local LLM (Ollama / LM Studio) — Recommended for Privacy
@@ -165,7 +170,7 @@ Looking to enhance your generation pipeline:
 ComfyMate analyzes the current pipeline topology, derives upstream/downstream data flow, and recommends matching nodes with interactive **1-Click "➕ Add to Canvas"** buttons:
 
 <p align="center">
-  <img src="docs/assets/node_analysis_dataflow.png" width="70%" alt="Node Recommendation & Data Flow" />
+  <img src="docs/assets/node_analysis_dataflow_en.png" width="85%" alt="Node Recommendation & Data Flow" />
 </p>
 
 #### Scenario E: Multimodal Clipboard & Screenshot Chat
