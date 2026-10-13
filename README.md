@@ -29,6 +29,10 @@ Most AI chat plugins simply open a detached LLM window where you have to manuall
 - 🔍 **Click-to-Locate & Visual Pulsing**: Click interactive node badges (`Node #3 [KSampler]`) in chat to automatically pan, center, and highlight the node on canvas with a pulsing blue outline.
 - ⚡ **One-Click Parameter Apply & Undo**: AI-recommended parameters are rendered as interactive action cards. Apply changes to LiteGraph widgets with a single click, with instant rollback support.
 - 💡 **Node Knowledge Base & 1-Click Placement**: Grounded with official node specifications (inputs, types, ranges); recommends nodes with a 1-click "➕ Add to Canvas" button.
+- 🔗 **Smart Auto-Connect**: AI infers missing connections between nodes and renders interactive wiring cards. Automatically validates port type compatibility; connect LiteGraph ports with a single click and undo anytime.
+- 📐 **Topological Auto-Layout**: Sugiyama-based layering engine with barycenter crossing minimization reorganizes tangled links and overlapping nodes with a smooth 260ms animation and 100% coordinate rollback.
+- 🚀 **Closed-Loop Agent & Vision Eval**: Submit workflow generations to ComfyUI queue with real-time progress tracking, capture output images, and trigger multimodal Vision evaluation to critique aesthetics and suggest parameter refinements.
+- 🗂️ **Per-Workflow Session Sync & Drawer**: Canvas tab switching seamlessly restores workflow-specific chat history; the sessions drawer enables managing, renaming, and backing up past conversations.
 - 🩺 **Workflow Doctor**: Pre-run static graph health check detecting disconnected inputs, unlinked VAE/CLIP ports, invalid dimensions, empty prompts, and orphan nodes.
 - 🖼️ **Multimodal Vision Chat**: Paste images directly from clipboard (`Cmd+V` / `Ctrl+V`) or drag & drop screenshots to ask AI about generated results, error popups, or node setups.
 - 💾 **Update-Safe Persistent Storage**: Configurations, conversations, and attachments automatically persist in ComfyUI's standard user directory (`ComfyUI/user/default/comfymate/`), completely immune to updates, re-clones, or registry reinstalls.
@@ -200,6 +204,38 @@ Interact bidirectionally with your canvas through AI responses:
 2. **One-Click Parameter Apply**: When ComfyMate suggests parameter optimizations (e.g., adjusting `cfg: 7.0`, `steps: 25`, or `denoise: 0.65`), an interactive action card appears. Click **`⚡ Apply Changes`** to write the parameters directly into the node's widgets on canvas.
 3. **Safe Rollback**: Changed your mind? Click **`↩️ Undo`** on the action card to instantly restore the previous parameter values.
 
+#### Scenario H: Smart Node Auto-Connection (connect_nodes)
+Save the hassle of manually dragging lines between microscopic port pins:
+1. Ask AI (e.g. *"I added FaceDetailer, how should I connect it to my existing KSampler and VAE?"* or *"Connect the MODEL output of CheckpointLoaderSimple to KSampler"*).
+2. ComfyMate generates an interactive **`🔗 Suggested Connection`** card showing source node, output slot, target node, and input slot.
+3. Click **`🔗 Connect Nodes`** to wire the ports on canvas immediately. The canvas smoothly centers on the connected node with a visual pulse.
+4. Click **`↩️ Disconnect`** on the action card anytime to instantly revert the connection.
+
+#### Scenario I: One-Click Topological Auto-Layout (auto_layout)
+As workflows grow, canvases easily become a chaotic web of overlapping nodes and crossed wires:
+1. Trigger auto-layout via any of three convenient methods:
+   - Click the **`📐` Auto-Layout button** in the top header;
+   - Click the **`📐 Auto Layout`** quick action pill;
+   - Ask AI to diagnose and click **`📐 Auto Layout`** on the action card.
+2. The engine uses a robust **Sugiyama Topological Layering** framework paired with a **Barycenter crossing minimization** heuristic:
+   - Derives pipeline layer ranks (Loader &rarr; Encoder &rarr; Sampler &rarr; Decoder &rarr; SaveImage);
+   - Reorders nodes by connection centers and vertically aligns layers;
+   - Transitions with a smooth 260ms cubic ease animation;
+   - Click **`↩️ Undo Layout`** to instantly restore exact prior node coordinates.
+
+#### Scenario J: Closed-Loop Test Generation & Multimodal Vision Evaluation (queue_prompt)
+Test and evaluate output image quality right inside your copilot workflow:
+1. Click the **`🚀` Queue button** in the header, the **`🚀 Test Run`** quick action pill, or the **`🚀 Run Test Now`** action card after tuning parameters.
+2. **Live Progress Tracking**: ComfyMate hooks directly into the ComfyUI execution event stream, displaying an animated glowing badge and real-time progress bar (current executing node and percentage).
+3. **Automatic Output Capture**: Once complete, generated images are captured and rendered as **thumbnails inside the card** (click any thumbnail to open the full-resolution preview).
+4. **Multimodal Aesthetic Evaluation**: Click **`🔍 Vision Evaluation`** to automatically pass the generated image into the vision model, prompting AI to evaluate composition, details, lighting, and anatomy, and propose iterative parameter refinements.
+5. **Instant Error Diagnostics**: If the workflow fails during generation, an error card captures the traceback with a **`🔧 Diagnose Error`** button for instant troubleshooting.
+
+#### Scenario K: Per-Workflow Chat Sync & Sessions History Drawer
+Seamless context isolation across multi-task sessions:
+1. **Per-Canvas Isolation**: Switching between workflow tabs in ComfyUI automatically restores the dedicated chat history for that specific canvas.
+2. **Sessions History Drawer**: Click the **`🕒` Sessions icon** in the header to open the history drawer, browse past conversations, rename sessions, or switch between tasks.
+
 ---
 
 ### 4. General Settings & Personalization
@@ -247,10 +283,11 @@ In the **⚙️ Settings &rarr; General** tab, you can customize:
   - 🛡️ Elimination of LLM parameter hallucinations via official input/output specification grounding
   - 💡 Interactive `recommend_nodes` cards with 1-click "➕ Add to Canvas" button
   - 🎯 Intelligent node placement (adjacent to selection or centered) with visual highlight pulse
-- [ ] **v0.4.0 (Autonomous Workflow Agent)**:
-  - AI-assisted node parameter auto-tuning and wiring
-  - One-click workflow layout tidying & sub-graph optimization
-  - Closed-loop generation, multimodal output evaluation, and iterative parameter tuning
+- [x] **v0.4.0 (Autonomous Workflow Agent)**:
+  - 🔗 Smart auto-connection & wiring cards (`connect_nodes` with 1-click apply & undo)
+  - 📐 Topological auto-layout engine (`auto_layout` with Sugiyama layering, smooth animation & rollback)
+  - 🚀 Closed-loop test generation, real-time progress & multimodal vision evaluation (`queue_prompt`)
+  - 🗂️ Per-workflow isolated chat history & sessions management drawer (Per-Workflow Session Sync)
 
 ---
 
