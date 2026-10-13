@@ -194,6 +194,10 @@ export class ChatUI {
     }
     this.panel.querySelector("#cm-btn-send").textContent = this.isStreaming ? this.t("stop") : this.t("send");
 
+    const btnQueue = this.panel.querySelector("#cm-btn-queue");
+    if (btnQueue) btnQueue.title = this.t("btnQueueTitle") || "测试出图";
+    const btnLayout = this.panel.querySelector("#cm-btn-layout");
+    if (btnLayout) btnLayout.title = this.t("btnLayoutTitle") || "一键整理排版";
     const btnNew = this.panel.querySelector("#cm-btn-new-chat");
     if (btnNew) btnNew.title = this.t("btnNewChatTitle") || "新建会话";
     const btnSess = this.panel.querySelector("#cm-btn-sessions");
@@ -202,6 +206,11 @@ export class ChatUI {
     this.panel.querySelector("#cm-btn-close").title = this.t("btnCloseTitle");
     this.panel.querySelector("#cm-resizer").title = this.t("resizerTitle");
     this.panel.querySelector("#cm-active-model-select").title = this.t("modelSelectorTitle");
+
+    const pillLayout = this.panel.querySelector("#cm-pill-layout");
+    if (pillLayout) pillLayout.textContent = this.t("layoutBtn") || "📐 整理画布";
+    const pillQueue = this.panel.querySelector("#cm-pill-queue");
+    if (pillQueue) pillQueue.textContent = this.t("queueBtn") || "🚀 测试出图";
 
     const edgeHandle = document.querySelector("#cm-edge-handle");
     if (edgeHandle) {
@@ -320,6 +329,12 @@ export class ChatUI {
   }
 
   _bindEvents() {
+    const queueHeaderBtn = this.panel.querySelector("#cm-btn-queue");
+    if (queueHeaderBtn) queueHeaderBtn.addEventListener("click", () => this._handleQueuePrompt());
+
+    const layoutBtn = this.panel.querySelector("#cm-btn-layout");
+    if (layoutBtn) layoutBtn.addEventListener("click", () => this._handleAutoLayout());
+
     const newChatBtn = this.panel.querySelector("#cm-btn-new-chat");
     if (newChatBtn) newChatBtn.addEventListener("click", () => this._createNewSession());
 
@@ -478,6 +493,10 @@ export class ChatUI {
           }
         } else if (action === "doctor_check") {
           this._runDoctorCheck();
+        } else if (action === "auto_layout") {
+          this._handleAutoLayout();
+        } else if (action === "queue_prompt") {
+          this._handleQueuePrompt();
         }
       });
     });
@@ -699,7 +718,331 @@ export class ChatUI {
         }
         return;
       }
+
+      // 10. Auto Layout Card: Apply Layout button
+      const applyLayoutBtn = e.target.closest(".cm-action-btn-layout");
+      if (applyLayoutBtn) {
+        const card = applyLayoutBtn.closest(".cm-action-card");
+        const scope = applyLayoutBtn.getAttribute("data-scope") || "all";
+        const res = this.actions.autoLayout({ scope, animate: true });
+        if (res.success) {
+          if (card) {
+            const footer = card.querySelector(".cm-action-footer");
+            if (footer && res.oldPositions) {
+              const oldPosJson = encodeURIComponent(JSON.stringify(res.oldPositions));
+              footer.innerHTML = `
+                <span class="cm-action-applied-badge">✅ ${this.t("layoutApplied") || "已规整"}</span>
+                <button class="cm-action-btn cm-action-btn-undo-layout" type="button" data-old-positions="${oldPosJson}" data-scope="${scope}">
+                  <span>↩️</span> <span>${this.t("undoLayout") || "撤回排版"}</span>
+                </button>
+              `;
+            }
+          }
+          Toast.success(this.t("layoutSuccess", { n: res.nodeCount }) || `已成功按拓扑层级规整 ${res.nodeCount} 个节点排版`);
+        } else {
+          Toast.error(this.t("layoutFailed", { msg: res.message || "Layout failed" }));
+        }
+        return;
+      }
+
+      // 11. Auto Layout Card: Undo Layout button
+      const undoLayoutBtn = e.target.closest(".cm-action-btn-undo-layout");
+      if (undoLayoutBtn) {
+        const card = undoLayoutBtn.closest(".cm-action-card");
+        const rawOldPos = decodeURIComponent(undoLayoutBtn.getAttribute("data-old-positions") || "{}");
+        const scope = undoLayoutBtn.getAttribute("data-scope") || "all";
+        try {
+          const oldPositions = JSON.parse(rawOldPos);
+          const res = this.actions.undoLayout(oldPositions, true);
+          if (res.success) {
+            if (card) {
+              const footer = card.querySelector(".cm-action-footer");
+              if (footer) {
+                footer.innerHTML = `
+                  <button class="cm-action-btn cm-action-btn-layout" type="button" data-scope="${scope}">
+                    <span>📐</span> <span>${this.t("applyLayout") || "一键整理排版"}</span>
+                  </button>
+                `;
+              }
+            }
+            Toast.info(this.t("undoLayoutSuccess") || "已恢复原有节点排版");
+          }
+        } catch (err) {
+          console.error("[ComfyMate] Failed to undo layout:", err);
+        }
+        return;
+      }
+
+      // 12. Queue Prompt Card: Run Test Generation button
+      const queueBtn = e.target.closest(".cm-action-btn-queue");
+      if (queueBtn) {
+        const card = queueBtn.closest(".cm-action-card");
+        const rawEvalPrompt = queueBtn.getAttribute("data-eval-prompt") || "";
+        const evalPrompt = rawEvalPrompt ? decodeURIComponent(rawEvalPrompt) : "";
+        this._handleQueuePrompt(card, evalPrompt);
+        return;
+      }
+
+      // 13. Queue Prompt Card: Vision Evaluation button
+      const evalBtn = e.target.closest(".cm-action-btn-eval");
+      if (evalBtn) {
+        const rawImgUrl = evalBtn.getAttribute("data-img-url") || "";
+        const rawEvalPrompt = evalBtn.getAttribute("data-eval-prompt") || "";
+        const imgUrl = rawImgUrl ? decodeURIComponent(rawImgUrl) : "";
+        const evalPrompt = rawEvalPrompt ? decodeURIComponent(rawEvalPrompt) : "";
+        this._handleVisionEval(imgUrl, evalPrompt);
+        return;
+      }
+
+      // 14. Queue Prompt Card: Diagnose Execution Error button
+      const diagBtn = e.target.closest(".cm-action-btn-diagnose");
+      if (diagBtn) {
+        const rawErr = decodeURIComponent(diagBtn.getAttribute("data-error") || "{}");
+        try {
+          const errObj = JSON.parse(rawErr);
+          const prefix = this.t("diagnosePromptPrefix") || "工作流在执行时发生报错：";
+          const errDetail = errObj.exception_message || errObj.message || "Unknown error";
+          const tb = errObj.traceback ? `\n\`\`\`text\n${errObj.traceback}\n\`\`\`` : "";
+          this.sendMessage(`${prefix}${errDetail}${tb}`);
+        } catch (_) {
+          this.sendMessage(this.t("promptDiagnoseErr"));
+        }
+        return;
+      }
+
+      // 15. Queue Prompt Result: View full generated image
+      const imgCard = e.target.closest(".cm-queue-img-card");
+      if (imgCard) {
+        const url = imgCard.getAttribute("data-url");
+        if (url) {
+          this._openImagePopup(url);
+        }
+        return;
+      }
     });
+  }
+
+  _handleAutoLayout() {
+    const res = this.actions.autoLayout({ scope: "all", animate: true });
+    if (res.success) {
+      Toast.success(this.t("layoutSuccess", { n: res.nodeCount }) || `已成功按拓扑层级规整 ${res.nodeCount} 个节点排版`);
+    } else {
+      Toast.warning(res.message || this.t("layoutFailed", { msg: "" }));
+    }
+  }
+
+  async _handleQueuePrompt(cardEl = null, evalPrompt = "") {
+    if (this._isQueueRunning) {
+      Toast.warning(this.t("runningQueue") || "执行生图中...");
+      return;
+    }
+
+    this._isQueueRunning = true;
+    Toast.info(this.t("queueStartedToast") || "已提交出图任务至队列");
+
+    let statusBadge = cardEl?.querySelector(".cm-queue-status-badge");
+    let progressContainer = cardEl?.querySelector(".cm-queue-progress-container");
+    let progressFill = cardEl?.querySelector(".cm-queue-progress-fill");
+    let progressText = cardEl?.querySelector(".cm-queue-progress-text");
+    let progressPercent = cardEl?.querySelector(".cm-queue-progress-percent");
+    let resultContainer = cardEl?.querySelector(".cm-queue-result-container");
+    let footer = cardEl?.querySelector(".cm-action-footer");
+    let queueBtn = cardEl?.querySelector(".cm-action-btn-queue");
+
+    if (queueBtn) {
+      queueBtn.disabled = true;
+      queueBtn.innerHTML = `<span>⏳</span> <span>${this.t("runningQueue") || "执行生图中..."}</span>`;
+    }
+
+    if (statusBadge) {
+      statusBadge.className = "cm-queue-status-badge cm-queue-status-running";
+      statusBadge.textContent = this.t("queueQueued") || "排队中...";
+    }
+
+    if (progressContainer) {
+      progressContainer.classList.remove("hidden");
+    }
+
+    const res = await this.actions.queuePrompt({
+      onStatusChange: (status, meta) => {
+        if (status === "executing" && statusBadge) {
+          statusBadge.textContent = meta?.nodeTitle
+            ? `${this.t("runningQueue") || "生图中"}: ${meta.nodeTitle}`
+            : (this.t("runningQueue") || "生图中...");
+        }
+      },
+      onProgress: ({ percent, nodeTitle }) => {
+        if (progressFill) progressFill.style.width = `${percent}%`;
+        if (progressPercent) progressPercent.textContent = `${percent}%`;
+        if (progressText) {
+          progressText.textContent = nodeTitle
+            ? `${nodeTitle} (${percent}%)`
+            : `${percent}%`;
+        }
+      },
+      onComplete: async ({ images, durationMs }) => {
+        this._isQueueRunning = false;
+        Toast.success(this.t("queueSuccessToast") || "工作流出图已完成！");
+
+        const sec = Math.round(durationMs / 1000);
+        if (statusBadge) {
+          statusBadge.className = "cm-queue-status-badge cm-queue-status-completed";
+          statusBadge.textContent = `✅ ${this.t("queueSuccess") || "出图完成"} (${sec}s)`;
+        }
+
+        if (progressContainer) {
+          progressContainer.classList.add("hidden");
+        }
+
+        if (resultContainer && images && images.length > 0) {
+          resultContainer.classList.remove("hidden");
+          const imgCards = images.map((img) => `
+            <div class="cm-queue-img-card" data-url="${img.url}">
+              <img src="${img.url}" alt="${img.filename}" title="${this.t("viewGeneratedImage") || "查看生成大图"}" />
+            </div>
+          `).join("");
+
+          resultContainer.innerHTML = `
+            <div class="cm-queue-images-grid">${imgCards}</div>
+          `;
+        }
+
+        if (footer) {
+          const firstImgUrl = images?.[0]?.url || "";
+          const safeEvalPrompt = evalPrompt || this.t("evalPromptDefault") || "请对刚才生成的图片进行多模态审美与质量评估，检查构图、细节、光影、肢体结构，并给出具体的参数微调建议。";
+          const encodedEvalPrompt = encodeURIComponent(safeEvalPrompt);
+          const encodedImgUrl = encodeURIComponent(firstImgUrl);
+
+          footer.innerHTML = `
+            <button class="cm-action-btn cm-action-btn-eval" type="button" data-img-url="${encodedImgUrl}" data-eval-prompt="${encodedEvalPrompt}">
+              <span>🔍</span> <span>${this.t("visionEvalBtn") || "视觉多模态评估"}</span>
+            </button>
+            <button class="cm-action-btn cm-action-btn-queue" type="button" data-eval-prompt="${encodeURIComponent(evalPrompt || "")}">
+              <span>🚀</span> <span>${this.t("runQueue") || "再次出图"}</span>
+            </button>
+          `;
+        }
+
+        if (!cardEl) {
+          this._postQueueCompletionMessage(images, durationMs, evalPrompt);
+        }
+      },
+      onError: (errPayload) => {
+        this._isQueueRunning = false;
+        const msg = errPayload.exception_message || errPayload.message || "Execution error";
+        Toast.error(this.t("queueFailedToast", { msg }));
+
+        if (statusBadge) {
+          statusBadge.className = "cm-queue-status-badge cm-queue-status-error";
+          statusBadge.textContent = `❌ ${this.t("queueFailed") || "出图失败"}`;
+        }
+
+        if (progressContainer) {
+          progressContainer.classList.add("hidden");
+        }
+
+        if (footer) {
+          const rawErr = encodeURIComponent(JSON.stringify(errPayload));
+          footer.innerHTML = `
+            <button class="cm-action-btn cm-action-btn-diagnose" type="button" data-error="${rawErr}">
+              <span>🔧</span> <span>${this.t("diagnoseErrorBtn") || "诊断报错原因"}</span>
+            </button>
+            <button class="cm-action-btn cm-action-btn-queue" type="button" data-eval-prompt="${encodeURIComponent(evalPrompt || "")}">
+              <span>🚀</span> <span>${this.t("runQueue") || "重新测试"}</span>
+            </button>
+          `;
+        }
+      },
+    });
+
+    if (!res.success) {
+      this._isQueueRunning = false;
+      if (queueBtn) queueBtn.disabled = false;
+      Toast.error(this.t("queueFailedToast", { msg: res.error?.message || "Failed to trigger queue" }));
+    }
+  }
+
+  async _handleVisionEval(imgUrl, evalPrompt) {
+    if (!imgUrl) return;
+    try {
+      const dataUrl = await this.actions.queueRunner.fetchImageAsDataUrl(imgUrl);
+      if (dataUrl) {
+        this.attachedImages.push({
+          dataUrl,
+          name: "output_eval.png",
+          localUrl: imgUrl,
+        });
+        this._renderAttachedImages();
+      }
+      const promptText = evalPrompt || this.t("evalPromptDefault") || "请对刚才生成的图片进行多模态审美与质量评估，检查构图、细节、光影、肢体结构，并给出具体的参数微调建议。";
+      this.sendMessage(promptText);
+    } catch (err) {
+      console.warn("[ComfyMate] Failed to attach image for vision eval:", err);
+      this.sendMessage(evalPrompt || this.t("evalPromptDefault"));
+    }
+  }
+
+  _postQueueCompletionMessage(images, durationMs, evalPrompt) {
+    const sec = Math.round(durationMs / 1000);
+    const imgItems = (images || []).map((img) => `
+      <div class="cm-queue-img-card" data-url="${img.url}">
+        <img src="${img.url}" alt="${img.filename}" title="${this.t("viewGeneratedImage") || "查看生成大图"}" />
+      </div>
+    `).join("");
+
+    const firstImgUrl = images?.[0]?.url || "";
+    const safeEvalPrompt = evalPrompt || this.t("evalPromptDefault") || "请对刚才生成的图片进行多模态审美与质量评估，检查构图、细节、光影、肢体结构，并给出具体的参数微调建议。";
+    const encodedEvalPrompt = encodeURIComponent(safeEvalPrompt);
+    const encodedImgUrl = encodeURIComponent(firstImgUrl);
+
+    const msgHtml = `
+      <div class="cm-action-card cm-queue-card" data-action="queue_prompt">
+        <div class="cm-action-header">
+          <div class="cm-action-title">
+            <span class="cm-action-icon">🚀</span>
+            <span>${this.t("queuePromptTitle") || "闭环测试出图"}</span>
+          </div>
+          <span class="cm-queue-status-badge cm-queue-status-completed">✅ ${this.t("queueSuccess") || "出图完成"} (${sec}s)</span>
+        </div>
+        <div class="cm-action-body">
+          <div class="cm-queue-result-container">
+            <div class="cm-queue-images-grid">${imgItems}</div>
+          </div>
+        </div>
+        <div class="cm-action-footer">
+          <button class="cm-action-btn cm-action-btn-eval" type="button" data-img-url="${encodedImgUrl}" data-eval-prompt="${encodedEvalPrompt}">
+            <span>🔍</span> <span>${this.t("visionEvalBtn") || "视觉多模态评估"}</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    const messagesContainer = this.panel.querySelector("#cm-messages");
+    const msgDiv = document.createElement("div");
+    msgDiv.className = "comfymate-message assistant";
+    msgDiv.innerHTML = msgHtml;
+    messagesContainer.appendChild(msgDiv);
+    this._scrollToBottom();
+
+    this.messages.push({
+      role: "assistant",
+      content: `🚀 **${this.t("queuePromptTitle") || "闭环测试出图"}**：出图完成 (${sec}s)，生成了 ${(images || []).length} 张图像。`,
+    });
+    this._saveCurrentSession();
+  }
+
+  _openImagePopup(imgUrl) {
+    if (!imgUrl) return;
+    const w = window.open("");
+    if (w && w.document) {
+      w.document.title = "ComfyMate Image Viewer";
+      const body = w.document.body;
+      body.style.cssText = "margin:0; background:#09090b; display:flex; align-items:center; justify-content:center; min-height:100vh;";
+      const fullImg = w.document.createElement("img");
+      fullImg.src = imgUrl;
+      fullImg.style.cssText = "max-width:100%; max-height:100vh; object-fit:contain;";
+      body.appendChild(fullImg);
+    }
   }
 
   async toggle(forceState) {

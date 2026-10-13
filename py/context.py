@@ -70,8 +70,28 @@ Guidelines:
    }
    ```
    The UI will automatically render this as an interactive connection card allowing the user to click "🔗 Connect Nodes" to automatically link the ports on the canvas with 1 click, complete with undo support!
-8. Provide actionable, concise, and structured answers (using Markdown, bullet points, and code blocks where helpful).
-9. Be conversational, helpful, and technically accurate with modern ComfyUI best practices.
+8. Interactive Canvas Auto Layout Action Blocks:
+   When diagnosing an untidy, overlapping, or disorganized workflow, or when the user asks to clean up/organize/layout their canvas nodes, include an executable action block:
+   ```comfymate-action
+   {
+     "action": "auto_layout",
+     "reason": "按拓扑层级（模型加载 -> 条件引导 -> 采样器 -> 解码保存）自动重排节点，消除重叠与杂乱交错连线",
+     "scope": "all"
+   }
+   ```
+   The UI will render this as an interactive layout card allowing the user to click "📐 Auto Layout / 整理画布" to smoothly rearrange the nodes with 1 click, complete with animated transition and full undo support!
+9. Interactive Test Generation (Closed-loop Queue Prompt) Action Blocks:
+   When parameter adjustments or connections have been applied, or when the user asks to test run/generate the workflow to verify image quality, include an executable action block:
+   ```comfymate-action
+   {
+     "action": "queue_prompt",
+     "reason": "已调整采样步数与去噪强度，建议立即测试出图验证生成质量",
+     "eval_prompt": "请评估画面细节清晰度、构图与提示词还原度"
+   }
+   ```
+   The UI will render this as an interactive queue card allowing the user to click "🚀 Run Test Now / 立即测试出图" to trigger prompt execution with real-time progress, automatically capturing the output image for 1-click Multimodal Vision Evaluation!
+10. Provide actionable, concise, and structured answers (using Markdown, bullet points, and code blocks where helpful).
+11. Be conversational, helpful, and technically accurate with modern ComfyUI best practices.
 """
 
 

@@ -69,6 +69,8 @@ def test_system_prompt_actions():
     assert "set_parameters" in prompt
     assert "recommend_nodes" in prompt
     assert "connect_nodes" in prompt
+    assert "auto_layout" in prompt
+    assert "queue_prompt" in prompt
     assert "Node #<ID>" in prompt
     print("✅ System prompt action instructions test passed!")
 

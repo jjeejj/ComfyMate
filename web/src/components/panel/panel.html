@@ -7,6 +7,12 @@
     <span class="comfymate-header-badge" id="cm-txt-copilot">{{copilot}}</span>
   </div>
   <div class="comfymate-header-actions">
+    <button class="comfymate-icon-btn" id="cm-btn-queue" title="{{btnQueueTitle}}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+    </button>
+    <button class="comfymate-icon-btn" id="cm-btn-layout" title="{{btnLayoutTitle}}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+    </button>
     <button class="comfymate-icon-btn" id="cm-btn-new-chat" title="{{btnNewChatTitle}}">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
     </button>
@@ -41,6 +47,8 @@
   <button class="comfymate-pill" data-action="explain_selected" id="cm-pill-sel">{{explainSel}}</button>
   <button class="comfymate-pill" data-action="diagnose_error" id="cm-pill-err">{{diagnoseErr}}</button>
   <button class="comfymate-pill" data-action="doctor_check" id="cm-pill-doctor">{{doctorBtn}}</button>
+  <button class="comfymate-pill" data-action="auto_layout" id="cm-pill-layout">{{layoutBtn}}</button>
+  <button class="comfymate-pill" data-action="queue_prompt" id="cm-pill-queue">{{queueBtn}}</button>
 </div>
 
 <!-- Chat Message Feed -->

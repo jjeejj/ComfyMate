@@ -7,10 +7,28 @@
  * 4. Workflow Doctor: automated workflow topology & parameter diagnostics
  */
 
+const safeRequestAnimationFrame = (callback) => {
+  if (typeof requestAnimationFrame === "function") {
+    return requestAnimationFrame(callback);
+  }
+  const now = typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+  return setTimeout(() => callback(now), 16);
+};
+
+const safeCancelAnimationFrame = (id) => {
+  if (typeof cancelAnimationFrame === "function") {
+    return cancelAnimationFrame(id);
+  }
+  return clearTimeout(id);
+};
+
+import { QueueRunner } from "../services/queue_runner.js";
+
 export class CanvasActionManager {
   constructor(app) {
     this.app = app;
     this.history = []; // History of applied parameter adjustments for undo
+    this.queueRunner = new QueueRunner(app);
   }
 
   /**
@@ -45,8 +63,8 @@ export class CanvasActionManager {
     try {
       const scale = canvas.ds?.scale || 1;
       const canvasEl = canvas.canvas;
-      const width = canvasEl?.width || window.innerWidth;
-      const height = canvasEl?.height || window.innerHeight;
+      const width = canvasEl?.width || (typeof window !== "undefined" ? window.innerWidth : 1200);
+      const height = canvasEl?.height || (typeof window !== "undefined" ? window.innerHeight : 800);
 
       const nodeX = node.pos && typeof node.pos[0] === "number" ? node.pos[0] : 0;
       const nodeY = node.pos && typeof node.pos[1] === "number" ? node.pos[1] : 0;
@@ -97,7 +115,7 @@ export class CanvasActionManager {
 
     const cleanup = () => {
       if (animId !== null) {
-        cancelAnimationFrame(animId);
+        safeCancelAnimationFrame(animId);
         animId = null;
       }
       node.onDrawForeground = origDrawForeground;
@@ -229,10 +247,10 @@ export class CanvasActionManager {
       }
 
       canvas.setDirty(true, true);
-      animId = requestAnimationFrame(step);
+      animId = safeRequestAnimationFrame(step);
     };
 
-    animId = requestAnimationFrame(step);
+    animId = safeRequestAnimationFrame(step);
   }
 
   /**
@@ -816,6 +834,298 @@ export class CanvasActionManager {
   }
 
   /**
+   * Automatically organize workflow nodes into a clean, readable topological layout.
+   * Uses Longest Path Topological Layering (Sugiyama framework) with median/barycenter
+   * ordering to minimize link crossings and prevent overlapping.
+   * Supports smooth animated transitions and full Undo.
+   */
+  autoLayout(options = {}) {
+    const graph = this.app?.graph;
+    if (!graph || !graph._nodes || graph._nodes.length === 0) {
+      return { success: false, message: "No nodes on canvas to layout" };
+    }
+
+    const scope = options.scope || "all";
+    const animate = options.animate !== false;
+    const horizontalGap = typeof options.horizontalGap === "number" ? options.horizontalGap : 80;
+    const verticalGap = typeof options.verticalGap === "number" ? options.verticalGap : 45;
+
+    const canvas = this.app?.canvas;
+    let targetNodes = [];
+
+    if (scope === "selected" && canvas?.selected_nodes && Object.keys(canvas.selected_nodes).length > 1) {
+      targetNodes = Object.values(canvas.selected_nodes).filter((n) => n && n.pos);
+    } else {
+      targetNodes = graph._nodes.filter((n) => n && n.pos);
+    }
+
+    if (targetNodes.length <= 1) {
+      return { success: true, count: targetNodes.length, message: "Node count <= 1, no layout needed" };
+    }
+
+    const nodeMap = new Map();
+    targetNodes.forEach((n) => nodeMap.set(n.id, n));
+    const targetIds = new Set(targetNodes.map((n) => n.id));
+
+    // 1. Record previous positions for Undo support
+    const oldPositions = {};
+    let minOrigX = Infinity;
+    let minOrigY = Infinity;
+    targetNodes.forEach((n) => {
+      oldPositions[n.id] = [n.pos[0], n.pos[1]];
+      if (n.pos[0] < minOrigX) minOrigX = n.pos[0];
+      if (n.pos[1] < minOrigY) minOrigY = n.pos[1];
+    });
+
+    if (!isFinite(minOrigX)) minOrigX = 100;
+    if (!isFinite(minOrigY)) minOrigY = 100;
+
+    // 2. Build adjacency graph (directed: predecessor -> successor)
+    const inNeighbors = new Map();  // nodeId -> Set of predecessor nodeIds
+    const outNeighbors = new Map(); // nodeId -> Set of successor nodeIds
+
+    targetNodes.forEach((n) => {
+      inNeighbors.set(n.id, new Set());
+      outNeighbors.set(n.id, new Set());
+    });
+
+    const links = graph.links || {};
+    targetNodes.forEach((n) => {
+      if (n.inputs && Array.isArray(n.inputs)) {
+        for (const input of n.inputs) {
+          if (input.link !== null && input.link !== undefined) {
+            const linkObj = links instanceof Map ? links.get(input.link) : links[input.link];
+            if (linkObj && targetIds.has(linkObj.origin_id)) {
+              inNeighbors.get(n.id).add(linkObj.origin_id);
+              outNeighbors.get(linkObj.origin_id).add(n.id);
+            }
+          }
+        }
+      }
+    });
+
+    // 3. Cycle breaking & Topological rank assignment
+    const ranks = new Map();
+    targetNodes.forEach((n) => ranks.set(n.id, 0));
+
+    // Bellman-Ford style relaxation to handle arbitrary DAGs (capped at 35 iterations to break cycles)
+    const maxIterations = Math.min(targetNodes.length, 35);
+    for (let iter = 0; iter < maxIterations; iter++) {
+      let changed = false;
+      for (const n of targetNodes) {
+        const currentRank = ranks.get(n.id);
+        let maxPredRank = -1;
+        for (const predId of inNeighbors.get(n.id)) {
+          const pRank = ranks.get(predId);
+          if (pRank > maxPredRank) maxPredRank = pRank;
+        }
+        if (maxPredRank >= 0 && maxPredRank + 1 > currentRank) {
+          ranks.set(n.id, maxPredRank + 1);
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+
+    // 4. Group nodes into layers
+    const layerMap = new Map();
+    let maxRank = 0;
+    targetNodes.forEach((n) => {
+      const r = ranks.get(n.id);
+      if (r > maxRank) maxRank = r;
+      if (!layerMap.has(r)) layerMap.set(r, []);
+      layerMap.get(r).push(n);
+    });
+
+    // 5. Order nodes within each layer to minimize link crossings (Barycenter heuristic)
+    for (let r = 0; r <= maxRank; r++) {
+      const layerNodes = layerMap.get(r);
+      if (!layerNodes || layerNodes.length <= 1) continue;
+
+      if (r === 0) {
+        layerNodes.sort((a, b) => a.pos[1] - b.pos[1]);
+      } else {
+        layerNodes.sort((a, b) => {
+          const getBarycenter = (node) => {
+            const preds = inNeighbors.get(node.id);
+            if (!preds || preds.size === 0) return node.pos[1];
+            let sumY = 0;
+            preds.forEach((pId) => {
+              const pNode = nodeMap.get(pId);
+              if (pNode) sumY += pNode.pos[1];
+            });
+            return sumY / preds.size;
+          };
+          return getBarycenter(a) - getBarycenter(b);
+        });
+      }
+    }
+
+    // 6. Compute target coordinates
+    const newPositions = {};
+    let curX = minOrigX;
+
+    const getNodeWidth = (n) => (n.size && n.size[0] ? n.size[0] : 210);
+    const getNodeHeight = (n) => (n.flags?.collapsed ? 36 : (n.size && n.size[1] ? n.size[1] : 120));
+
+    let maxLayerHeight = 0;
+    for (let r = 0; r <= maxRank; r++) {
+      const lNodes = layerMap.get(r) || [];
+      const h = lNodes.reduce((acc, n) => acc + getNodeHeight(n), 0) + Math.max(0, lNodes.length - 1) * verticalGap;
+      if (h > maxLayerHeight) maxLayerHeight = h;
+    }
+
+    for (let r = 0; r <= maxRank; r++) {
+      const lNodes = layerMap.get(r) || [];
+      if (lNodes.length === 0) continue;
+
+      const layerWidth = Math.max(...lNodes.map(getNodeWidth));
+      const layerHeight = lNodes.reduce((acc, n) => acc + getNodeHeight(n), 0) + Math.max(0, lNodes.length - 1) * verticalGap;
+
+      let curY = minOrigY + (maxLayerHeight - layerHeight) / 2;
+
+      for (const n of lNodes) {
+        newPositions[n.id] = [Math.round(curX), Math.round(curY)];
+        curY += getNodeHeight(n) + verticalGap;
+      }
+
+      curX += layerWidth + horizontalGap;
+    }
+
+    // 7. Apply positions (with smooth animation if enabled)
+    if (animate) {
+      this._animateLayout(targetNodes, oldPositions, newPositions, () => {
+        if (graph.setDirtyCanvas) graph.setDirtyCanvas(true, true);
+      });
+    } else {
+      targetNodes.forEach((n) => {
+        const pos = newPositions[n.id];
+        if (pos) {
+          n.pos[0] = pos[0];
+          n.pos[1] = pos[1];
+        }
+      });
+      if (graph.setDirtyCanvas) graph.setDirtyCanvas(true, true);
+    }
+
+    // 8. Flash first and last nodes
+    if (targetNodes.length > 0) {
+      this.flashNode(targetNodes[0]);
+      if (targetNodes.length > 1) {
+        this.flashNode(targetNodes[targetNodes.length - 1]);
+      }
+    }
+
+    return {
+      success: true,
+      nodeCount: targetNodes.length,
+      oldPositions,
+      newPositions,
+    };
+  }
+
+  _animateLayout(nodes, oldPositions, newPositions, onComplete = null) {
+    const duration = 260; // ms
+    const startTime = performance.now();
+    const graph = this.app?.graph;
+
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+    const step = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const t = Math.min(1, elapsed / duration);
+      const ease = easeOutCubic(t);
+
+      for (const n of nodes) {
+        const oldPos = oldPositions[n.id];
+        const newPos = newPositions[n.id];
+        if (oldPos && newPos) {
+          n.pos[0] = Math.round(oldPos[0] + (newPos[0] - oldPos[0]) * ease);
+          n.pos[1] = Math.round(oldPos[1] + (newPos[1] - oldPos[1]) * ease);
+        }
+      }
+
+      if (graph && graph.setDirtyCanvas) {
+        graph.setDirtyCanvas(true, true);
+      }
+
+      if (t < 1) {
+        safeRequestAnimationFrame(step);
+      } else {
+        for (const n of nodes) {
+          const newPos = newPositions[n.id];
+          if (newPos) {
+            n.pos[0] = newPos[0];
+            n.pos[1] = newPos[1];
+          }
+        }
+        if (graph && graph.setDirtyCanvas) {
+          graph.setDirtyCanvas(true, true);
+        }
+        if (typeof onComplete === "function") onComplete();
+      }
+    };
+
+    safeRequestAnimationFrame(step);
+  }
+
+  undoLayout(oldPositions, animate = true) {
+    if (!oldPositions || typeof oldPositions !== "object") {
+      return { success: false, message: "No position history available" };
+    }
+
+    const nodeIds = Object.keys(oldPositions);
+    const nodes = [];
+    const currentPositions = {};
+
+    for (const idStr of nodeIds) {
+      const node = this.getNode(idStr);
+      if (node && node.pos) {
+        nodes.push(node);
+        currentPositions[node.id] = [node.pos[0], node.pos[1]];
+      }
+    }
+
+    if (nodes.length === 0) {
+      return { success: false, message: "No matching nodes found on canvas" };
+    }
+
+    if (animate) {
+      this._animateLayout(nodes, currentPositions, oldPositions, () => {
+        if (this.app?.graph?.setDirtyCanvas) {
+          this.app.graph.setDirtyCanvas(true, true);
+        }
+      });
+    } else {
+      nodes.forEach((n) => {
+        const pos = oldPositions[n.id];
+        if (pos) {
+          n.pos[0] = pos[0];
+          n.pos[1] = pos[1];
+        }
+      });
+      if (this.app?.graph?.setDirtyCanvas) {
+        this.app.graph.setDirtyCanvas(true, true);
+      }
+    }
+
+    return {
+      success: true,
+      nodeCount: nodes.length,
+    };
+  }
+
+  /**
+   * Trigger workflow prompt generation and capture real-time progress and output images.
+   */
+  async queuePrompt(callbacks = {}) {
+    if (!this.queueRunner) {
+      this.queueRunner = new QueueRunner(this.app);
+    }
+    return await this.queueRunner.run(callbacks);
+  }
+
+  /**
    * Inspect current workflow topology and parameters for common pitfalls:
    * 1. Missing required connections on essential nodes (KSampler, VAE, CLIP)
    * 2. Empty prompts on text encoders
@@ -1038,6 +1348,28 @@ export class CanvasActionManager {
           fixSuggestion: "如不需要此节点可直接删除，或连接至相应流程中",
         });
       }
+    }
+
+    // 8. Overlapping nodes detection
+    let overlapCount = 0;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const nA = nodes[i];
+        const nB = nodes[j];
+        if (nA.pos && nB.pos && Math.abs(nA.pos[0] - nB.pos[0]) < 25 && Math.abs(nA.pos[1] - nB.pos[1]) < 25) {
+          overlapCount++;
+        }
+      }
+    }
+    if (overlapCount > 0) {
+      issues.push({
+        severity: "warning",
+        nodeId: null,
+        nodeType: "WorkflowLayout",
+        title: "画布排版重叠",
+        message: `检测到 ${overlapCount} 处节点位置严重重叠交错`,
+        fixSuggestion: "建议使用「📐 整理画布」重新按拓扑层级排列节点",
+      });
     }
 
     return {

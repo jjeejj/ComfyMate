@@ -13,8 +13,9 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
-export function renderMarkdown(text, t = (k) => k) {
+export function renderMarkdown(text, tArg = (k) => k) {
   if (!text) return "";
+  const t = typeof tArg === "function" ? tArg : (k) => (tArg && tArg[k]) || k;
 
   // 1. Pre-process and extract code blocks (both complete and open/streaming)
   const codeBlocks = [];
@@ -237,7 +238,7 @@ export function renderMarkdown(text, t = (k) => k) {
     const isJsonAction =
       (item.lang === "json" || !item.lang || item.lang === "text") &&
       item.code.includes('"action"') &&
-      (item.code.includes('"set_parameters"') || item.code.includes('"recommend_nodes"') || item.code.includes('"connect_nodes"'));
+      (item.code.includes('"set_parameters"') || item.code.includes('"recommend_nodes"') || item.code.includes('"connect_nodes"') || item.code.includes('"auto_layout"'));
 
     if (isActionLang || isJsonAction) {
       try {
@@ -392,6 +393,72 @@ export function renderMarkdown(text, t = (k) => k) {
             html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
             return;
           }
+        } else if (parsed && parsed.action === "auto_layout") {
+          const reasonEsc = parsed.reason ? escapeHtml(parsed.reason) : "";
+          const scope = parsed.scope === "selected" ? "selected" : "all";
+          const scopeBadge = scope === "selected" ? (t("scopeSelected") || "选中节点") : (t("scopeAll") || "全部节点");
+
+          const cardHtml = `
+            <div class="cm-action-card cm-layout-card" data-action="auto_layout" data-scope="${scope}">
+              <div class="cm-action-header">
+                <div class="cm-action-title">
+                  <span class="cm-action-icon">📐</span>
+                  <span>${t("autoLayoutTitle") || "AI 画布拓扑规整"}</span>
+                </div>
+                <span class="cm-layout-badge">${scopeBadge}</span>
+              </div>
+              <div class="cm-action-body">
+                <div class="cm-layout-desc">
+                  <span>${reasonEsc || (t("autoLayoutDefaultReason") || "自动分析当前工作流的上下游连线关系，按照拓扑层级深度重排节点位置，消除重叠与杂乱交错连线。")}</span>
+                </div>
+              </div>
+              <div class="cm-action-footer">
+                <button class="cm-action-btn cm-action-btn-layout" type="button" data-scope="${scope}">
+                  <span>📐</span> <span>${t("applyLayout") || "一键整理排版"}</span>
+                </button>
+              </div>
+            </div>
+          `;
+          html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
+          return;
+        } else if (parsed && parsed.action === "queue_prompt") {
+          const reasonEsc = parsed.reason ? escapeHtml(parsed.reason) : "";
+          const evalPrompt = parsed.eval_prompt ? encodeURIComponent(parsed.eval_prompt) : "";
+          const defaultReason = t("queuePromptDefaultReason") || "建议立即测试出图以验证工作流与参数调整效果。";
+
+          const cardHtml = `
+            <div class="cm-action-card cm-queue-card" data-action="queue_prompt" data-eval-prompt="${evalPrompt}">
+              <div class="cm-action-header">
+                <div class="cm-action-title">
+                  <span class="cm-action-icon">🚀</span>
+                  <span>${t("queuePromptTitle") || "闭环测试出图"}</span>
+                </div>
+                <span class="cm-queue-status-badge cm-queue-status-idle">${t("queueReady") || "准备就绪"}</span>
+              </div>
+              <div class="cm-action-body">
+                <div class="cm-queue-desc">
+                  <span>${reasonEsc || defaultReason}</span>
+                </div>
+                <div class="cm-queue-progress-container hidden">
+                  <div class="cm-queue-progress-bar">
+                    <div class="cm-queue-progress-fill" style="width: 0%"></div>
+                  </div>
+                  <div class="cm-queue-progress-info">
+                    <span class="cm-queue-progress-text">${t("queueQueued") || "排队中..."}</span>
+                    <span class="cm-queue-progress-percent">0%</span>
+                  </div>
+                </div>
+                <div class="cm-queue-result-container hidden"></div>
+              </div>
+              <div class="cm-action-footer">
+                <button class="cm-action-btn cm-action-btn-queue" type="button" data-eval-prompt="${evalPrompt}">
+                  <span>🚀</span> <span>${t("runQueue") || "立即测试出图"}</span>
+                </button>
+              </div>
+            </div>
+          `;
+          html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
+          return;
         }
       } catch (e) {
         // Fall back to normal code block rendering
