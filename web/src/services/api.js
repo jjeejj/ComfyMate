@@ -32,7 +32,7 @@ export class ApiClient {
     return await this._handleResponse(resp, "Save config");
   }
 
-  static async testConnection({ id, api_type, base_url, api_key, model, models, fetch_models_only = false }) {
+  static async testConnection({ id, api_type, base_url, api_key, model, models, proxy, fetch_models_only = false }) {
     const resp = await fetch("/comfymate/api/test_connection", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -44,6 +44,7 @@ export class ApiClient {
         model,
         models,
         fetch_models_only,
+        proxy,
       }),
     });
     // For test connection, status 400/504 can still return structured error details

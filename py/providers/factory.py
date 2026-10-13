@@ -17,7 +17,9 @@ class LLMProviderFactory:
         name = (cfg.get("name") or "").strip().lower()
 
         # Determine if Anthropic
-        if api_type == "anthropic" or "anthropic" in base_url or "claude" in model or "anthropic" in name:
+        if api_type == "anthropic" or (
+            not api_type and ("anthropic" in base_url or "claude" in model or "anthropic" in name)
+        ):
             cfg["api_type"] = "anthropic"
             return AnthropicProvider(cfg)
 

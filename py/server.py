@@ -136,14 +136,14 @@ async def handle_test_connection(request: web.Request) -> web.Response:
                 model = str(models[0]).strip()
 
         # If test request didn't supply key or sent masked, find in saved config
-        if not api_key or "..." in api_key or "********" in api_key or not proxy:
+        if not api_key or "..." in api_key or "********" in api_key or "proxy" not in data:
             provider_id = data.get("id")
             cfg = load_config()
             for p in cfg.get("providers", []):
                 if p.get("id") == provider_id or p.get("base_url") == base_url:
                     if not api_key or "..." in api_key or "********" in api_key:
                         api_key = p.get("api_key", "")
-                    if not proxy:
+                    if "proxy" not in data:
                         proxy = str(p.get("proxy", "")).strip()
                     if not api_type:
                         api_type = p.get("api_type", "")
@@ -379,17 +379,10 @@ async def handle_chat(request: web.Request) -> web.StreamResponse:
             if provider_id:
                 for p in cfg.get("providers", []):
                     if p.get("id") == provider_id:
-                        active_profile = {
-                            "provider_id": p.get("id"),
-                            "provider_name": p.get("name"),
-                            "api_type": p.get("api_type", "openai"),
-                            "base_url": p.get("base_url"),
-                            "api_key": p.get("api_key", ""),
-                            "proxy": str(p.get("proxy", "")).strip(),
-                            "model": model_override.get("model") or (p.get("models") and p["models"][0]) or "default",
-                            "temperature": p.get("temperature", 0.7),
-                            "max_tokens": p.get("max_tokens", 4096),
-                        }
+                        selected_cfg = dict(cfg)
+                        selected_cfg["active_provider_id"] = provider_id
+                        selected_cfg["active_model"] = model_override.get("model") or (p.get("models") and p["models"][0]) or "default"
+                        active_profile = get_active_provider_and_model(selected_cfg)
                         break
             if "model" in model_override and model_override["model"] and active_profile:
                 active_profile["model"] = model_override["model"]

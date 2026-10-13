@@ -21,7 +21,8 @@ export class QueueRunner {
    * Check if ComfyUI queue prompt capability is accessible.
    */
   isSupported() {
-    return !!(this.app && (typeof this.app.queuePrompt === "function" || this.app.api));
+    return !!(this.app?.api?.addEventListener && (typeof this.app.queuePrompt === "function"
+      || (typeof this.app?.api?.queuePrompt === "function" && typeof this.app.graphToPrompt === "function")));
   }
 
   /**
@@ -70,6 +71,58 @@ export class QueueRunner {
     }
   }
 
+  async _submitPrompt(bindPrompt) {
+    const app = this.app;
+    const api = app.api;
+    if (typeof app.queuePrompt !== "function") {
+      const prompt = await app.graphToPrompt();
+      const result = await api.queuePrompt(0, prompt);
+      if (!result?.prompt_id) throw new Error("ComfyUI did not accept the prompt");
+      bindPrompt(result.prompt_id);
+      return;
+    }
+    // Keep native submission (seed/widget hooks, auth, validation and job bookkeeping).
+    // Observe its exported prompt by object identity, never a WebSocket execution_start.
+    if (app.processingQueue) throw new Error("ComfyUI is submitting another prompt; retry shortly");
+    const originalExport = app.graphToPrompt;
+    const originalSubmit = api.queuePrompt;
+    let ownedPrompt;
+    let exportCount = 0;
+    let result;
+    const observeExport = async function (...args) {
+      const owned = ++exportCount === 1;
+      const prompt = await originalExport.apply(this, args);
+      if (owned) ownedPrompt = prompt;
+      return prompt;
+    };
+    const observeSubmit = async function (number, prompt, ...args) {
+      const response = await originalSubmit.call(this, number, prompt, ...args);
+      if (prompt === ownedPrompt && !result) {
+        result = response;
+      }
+      return response;
+    };
+    const observing = typeof originalExport === "function" && typeof originalSubmit === "function";
+    if (observing) {
+      app.graphToPrompt = observeExport;
+      api.queuePrompt = observeSubmit;
+    }
+    try {
+      const accepted = await app.queuePrompt(0, 1);
+      if (accepted === false) throw new Error("ComfyUI rejected the prompt submission");
+      if (!accepted?.prompt_id && exportCount !== 1 && observing) {
+        throw new Error("The workflow may already be queued, but this test cannot be tracked reliably. Check the ComfyUI queue before trying again.");
+      }
+      const promptId = accepted?.prompt_id || result?.prompt_id;
+      if (!promptId) throw new Error("ComfyUI did not return an identifiable prompt");
+      bindPrompt(promptId);
+    } finally {
+      // Avoid overwriting wrappers installed by another extension while we awaited submission.
+      if (app.graphToPrompt === observeExport) app.graphToPrompt = originalExport;
+      if (api.queuePrompt === observeSubmit) api.queuePrompt = originalSubmit;
+    }
+  }
+
   /**
    * Execute the workflow in ComfyUI and track progress until completion or error.
    *
@@ -95,8 +148,13 @@ export class QueueRunner {
       return { success: false, error: err };
     }
 
-    // Clean up any existing listeners before starting
+    if (this.status === "queuing" || this.status === "executing") {
+      const error = new Error("A ComfyMate test is already running");
+      if (onError) onError({ error, message: error.message });
+      return { success: false, error };
+    }
     this.cancel();
+    const runToken = this._runToken;
 
     this.status = "queuing";
     this.outputImages = [];
@@ -124,6 +182,16 @@ export class QueueRunner {
 
     let executionStarted = false;
     let finished = false;
+    const pending = [];
+    const accepts = (event, handler) => {
+      if (finished || this._runToken !== runToken) return false;
+      if (!this.activePromptId) {
+        if (pending.length >= 2048) pending.shift();
+        pending.push({ event, handler });
+        return false;
+      }
+      return event?.detail?.prompt_id === this.activePromptId;
+    };
 
     const cleanup = () => {
       this.listeners.forEach(({ eventName, handler }) => {
@@ -138,16 +206,14 @@ export class QueueRunner {
 
     // 1. Listen for Execution Start
     const handleStart = (event) => {
-      const pId = event?.detail?.prompt_id;
-      if (pId) {
-        this.activePromptId = pId;
-        executionStarted = true;
-      }
+      if (!accepts(event, handleStart)) return;
+      executionStarted = true;
     };
     addApiListener("execution_start", handleStart);
 
     // 2. Listen for Progress Updates
     const handleProgress = (event) => {
+      if (!accepts(event, handleProgress)) return;
       const d = event?.detail || {};
       const value = d.value || 0;
       const max = d.max || 1;
@@ -174,13 +240,9 @@ export class QueueRunner {
 
     // 3. Listen for Currently Executing Node
     const handleExecuting = (event) => {
+      if (!accepts(event, handleExecuting)) return;
       const d = event?.detail;
       const nodeId = typeof d === "object" ? d?.node : d;
-      const promptId = typeof d === "object" ? d?.prompt_id : null;
-
-      if (promptId && !this.activePromptId) {
-        this.activePromptId = promptId;
-      }
 
       // In ComfyUI WebSocket protocol: when node is null/undefined, execution of the prompt is finished!
       if (nodeId === null || nodeId === undefined) {
@@ -208,6 +270,7 @@ export class QueueRunner {
 
     // 4. Listen for Executed Nodes with Output Artifacts (Images)
     const handleExecuted = (event) => {
+      if (!accepts(event, handleExecuted)) return;
       const d = event?.detail || {};
       const nodeId = d.node;
       const output = d.output;
@@ -235,7 +298,7 @@ export class QueueRunner {
 
     // 5. Listen for Execution Error
     const handleError = (event) => {
-      if (finished) return;
+      if (!accepts(event, handleError)) return;
       finished = true;
       cleanup();
 
@@ -254,6 +317,13 @@ export class QueueRunner {
       if (onError) onError(errPayload);
     };
     addApiListener("execution_error", handleError);
+
+    addApiListener("execution_interrupted", handleError);
+    const handleSuccess = (event) => {
+      if (!accepts(event, handleSuccess)) return;
+      finishSuccess();
+    };
+    addApiListener("execution_success", handleSuccess);
 
     // Finish handler when all steps complete
     const finishSuccess = () => {
@@ -276,16 +346,19 @@ export class QueueRunner {
 
     // Trigger the actual queue execution in ComfyUI
     try {
-      if (typeof this.app.queuePrompt === "function") {
-        await this.app.queuePrompt(0, 1);
-      } else if (this.app.api && typeof this.app.api.queuePrompt === "function") {
-        await this.app.api.queuePrompt(0, 1);
-      } else {
-        throw new Error("No available queuePrompt method found on ComfyUI app instance");
-      }
+      await this._submitPrompt((promptId) => {
+        if (this._runToken !== runToken || finished) return;
+        if (this.activePromptId && this.activePromptId !== promptId) {
+          throw new Error("Submission returned multiple prompt identities");
+        }
+        this.activePromptId = promptId;
+        const buffered = pending.splice(0);
+        for (const { event, handler } of buffered) handler(event);
+      });
+      if (this._runToken !== runToken) return { success: false, cancelled: true };
       return { success: true };
     } catch (err) {
-      if (finished) return { success: false, error: err };
+      if (this._runToken !== runToken || finished) return { success: false, error: err };
       finished = true;
       cleanup();
 
@@ -305,6 +378,7 @@ export class QueueRunner {
    * Cancel ongoing tracking and remove all event listeners.
    */
   cancel() {
+    this._runToken = (this._runToken || 0) + 1;
     if (this.listeners.length > 0) {
       const api = this.app?.api;
       this.listeners.forEach(({ eventName, handler }) => {

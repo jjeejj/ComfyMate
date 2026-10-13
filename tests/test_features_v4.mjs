@@ -32,6 +32,7 @@ function testConnectNodes() {
 
   let connectCalled = false;
   let disconnectCalled = false;
+  const links = {};
 
   const node1 = {
     id: 1,
@@ -43,7 +44,8 @@ function testConnectNodes() {
       connectCalled = true;
       this.outputs[outSlot].links.push(999);
       targetNode.inputs[inSlot].link = 999;
-      return true;
+      links[999] = { id: 999, origin_id: this.id, origin_slot: outSlot, target_id: targetNode.id, target_slot: inSlot };
+      return links[999];
     },
     disconnectInput(slot) {
       disconnectCalled = true;
@@ -67,7 +69,7 @@ function testConnectNodes() {
   const mockApp = {
     graph: {
       getNodeById: (id) => nodeMap.get(id),
-      links: {},
+      links,
       setDirtyCanvas: () => {},
     },
     canvas: {
@@ -200,6 +202,7 @@ async function testQueueRunner() {
     },
     queuePrompt: async () => {
       promptQueued = true;
+      return { prompt_id: "pid-12345" };
     },
   };
 
@@ -215,6 +218,8 @@ async function testQueueRunner() {
   });
 
   assert(runner.getStatus() === "queuing", "Status is queuing upon submit");
+
+  await runPromise;
 
   // Simulate WebSocket events from ComfyUI
   mockApi.emit("execution_start", { prompt_id: "pid-12345" });
@@ -242,10 +247,11 @@ async function testQueueRunner() {
 
   // Error simulation
   let interceptedError = null;
-  runner.run({
+  await runner.run({
     onError: (err) => { interceptedError = err; },
   });
   mockApi.emit("execution_error", {
+    prompt_id: "pid-12345",
     node_id: 3,
     node_type: "KSampler",
     exception_message: "CUDA out of memory",

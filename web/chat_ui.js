@@ -15,6 +15,7 @@ export class ChatUI {
     this.messages = [];
     this.isStreaming = false;
     this.abortController = null;
+    this._activeChatRequest = null;
     this.isVisible = false;
     this.config = null;
     this.attachedImages = [];
@@ -1362,6 +1363,18 @@ export class ChatUI {
 
     this._setStreamingState(true);
     this.abortController = new AbortController();
+    const request = {
+      controller: this.abortController,
+      sessionId: this.currentSessionId,
+      workflowName: this.activeWorkflow?.name || "",
+      messages: this.messages,
+    };
+    this._activeChatRequest = request;
+    const ownsRequest = () => this._activeChatRequest === request
+      && this.currentSessionId === request.sessionId
+      && (this.activeWorkflow?.name || "") === request.workflowName
+      && this.messages === request.messages;
+
 
     const startTime = Date.now();
     let fullRawContent = "";
@@ -1382,12 +1395,13 @@ export class ChatUI {
 
     try {
       await ApiClient.streamChat({
-        messages: this.messages,
+        messages: request.messages,
         context: context,
         model_config: modelOverride,
         language: this._getEffectiveLang(),
-        signal: this.abortController.signal,
+        signal: request.controller.signal,
         onEvent: (event) => {
+          if (!ownsRequest() || request.controller.signal.aborted) return;
           if (event.type === "thinking") {
             thinkingBox.style.display = "block";
             fullThinking += event.text;
@@ -1451,6 +1465,7 @@ export class ChatUI {
         },
       });
 
+      if (!ownsRequest() || request.controller.signal.aborted) return;
       if (!hasError) {
         if (typingIndicator.parentNode) typingIndicator.remove();
 
@@ -1491,6 +1506,7 @@ export class ChatUI {
         }
       }
     } catch (err) {
+      if (!ownsRequest()) return;
       if (typingIndicator.parentNode) typingIndicator.remove();
       if (err.name === "AbortError") {
         contentBox.innerHTML = renderMarkdown(fullAnswer, (k) => this.t(k)) + ` <i style="color:#71717a;">(${this.t("generationStopped")})</i>`;
@@ -1504,9 +1520,12 @@ export class ChatUI {
       }
     } finally {
       if (typingIndicator.parentNode) typingIndicator.remove();
-      this._setStreamingState(false);
-      this.abortController = null;
-      this._scrollToBottom();
+      if (this._activeChatRequest === request) {
+        this._activeChatRequest = null;
+        this._setStreamingState(false);
+        this.abortController = null;
+        this._scrollToBottom();
+      }
     }
   }
 
@@ -1761,6 +1780,7 @@ export class ChatUI {
 
   async _switchWorkflowChat(wf, prevKey) {
     if (!wf || !wf.name) return;
+    this.stopGeneration();
     const newWfName = wf.name;
 
     // Increment switch token to invalidate any previous in-flight switch requests
@@ -1883,6 +1903,8 @@ export class ChatUI {
   }
 
   _createNewSessionForWorkflow(wf) {
+    this.stopGeneration();
+    this._switchGenerationToken = (this._switchGenerationToken || 0) + 1;
     const wfName = wf?.name || "";
     this.messages = [];
     this.currentSessionId = null;
@@ -1907,57 +1929,48 @@ export class ChatUI {
 
   /* ---------------- Session & History Management ---------------- */
 
+  _newSessionId() {
+    return `sess_${globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`}`;
+  }
+
   async _saveCurrentSession(targetWfName = null, targetSessionId = null, targetMessages = null, targetTitle = null) {
     const wfName = targetWfName !== null ? targetWfName : (this.activeWorkflow?.name || "");
-    const messages = targetMessages !== null ? targetMessages : [...this.messages];
-    const sessId = targetSessionId !== null ? targetSessionId : this.currentSessionId;
+    const messages = targetMessages !== null ? [...targetMessages] : [...this.messages];
+    if (!messages.length) return;
 
-    if (!messages || messages.length === 0) return;
-
+    // Allocate identity before the first network request, so overlapping saves cannot create duplicates.
+    const detached = targetWfName !== null;
+    const sessId = targetSessionId || (detached ? this._newSessionId() : (this.currentSessionId || this._newSessionId()));
+    if (!detached) this.currentSessionId = sessId;
     let title = targetTitle || this.currentSessionTitle;
     if (!title) {
-      if (wfName) {
-        title = wfName;
-      } else {
-        const firstUserMsg = messages.find((m) => m.role === "user");
-        title = firstUserMsg?.content ? firstUserMsg.content.trim().split("\n")[0].slice(0, 32) : (this.t("newChat") || "新会话");
-      }
-      if (targetWfName === null) {
-        this.currentSessionTitle = title;
-      }
+      const firstUserMsg = messages.find((m) => m.role === "user");
+      title = wfName || firstUserMsg?.content?.trim().split("\n")[0].slice(0, 32) || this.t("newChat");
+      if (!detached) this.currentSessionTitle = title;
     }
-
-    // Keep in-memory cache synchronized for fast switching
     if (wfName) {
-      this._workflowChatCache[wfName] = {
-        sessionId: sessId,
-        title: title,
-        messages: [...messages],
-      };
+      this._workflowChatCache[wfName] = { sessionId: sessId, title, messages };
     }
 
+    this._sessionSaveQueues ||= new Map();
+    const previous = this._sessionSaveQueues.get(sessId) || Promise.resolve();
+    const save = previous.catch(() => {}).then(() => ApiClient.saveSession({
+      id: sessId, title, workflow_name: wfName, messages,
+    }));
+    this._sessionSaveQueues.set(sessId, save);
     try {
-      const res = await ApiClient.saveSession({
-        id: sessId || undefined,
-        title: title,
-        workflow_name: wfName,
-        messages: messages,
-      });
-      if (res && res.status === "ok" && res.session) {
-        const newId = res.session.id;
-        if (targetWfName === null || this.activeWorkflow?.name === wfName) {
-          this.currentSessionId = newId;
+      const res = await save;
+      if (res?.status === "ok" && res.session?.id === sessId) {
+        if (this.currentSessionId === sessId && (this.activeWorkflow?.name || "") === wfName) {
           this.currentSessionTitle = res.session.title;
         }
-        if (wfName) {
-          if (this._workflowChatCache[wfName]) {
-            this._workflowChatCache[wfName].sessionId = newId;
-            this._workflowChatCache[wfName].title = res.session.title;
-          }
-        }
+        const cached = this._workflowChatCache[wfName];
+        if (cached?.sessionId === sessId) cached.title = res.session.title;
       }
     } catch (err) {
       console.warn("[ComfyMate] Failed to save session to disk:", err);
+    } finally {
+      if (this._sessionSaveQueues.get(sessId) === save) this._sessionSaveQueues.delete(sessId);
     }
   }
 
@@ -2108,8 +2121,11 @@ export class ChatUI {
   }
 
   async _switchSession(sessionId) {
+    this.stopGeneration();
+    const switchToken = this._switchGenerationToken = (this._switchGenerationToken || 0) + 1;
     try {
       const res = await ApiClient.getSession(sessionId);
+      if (this._switchGenerationToken !== switchToken) return;
       if (res && res.status === "ok" && res.session) {
         const sessionWfName = res.session.workflow_name;
 
@@ -2152,6 +2168,8 @@ export class ChatUI {
   }
 
   _createNewSession() {
+    this.stopGeneration();
+    this._switchGenerationToken = (this._switchGenerationToken || 0) + 1;
     const wfName = this.activeWorkflow?.name;
     if (wfName) {
       // Explicitly mark cache as clean blank session so returning to this workflow won't revive old session

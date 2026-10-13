@@ -661,6 +661,18 @@ export class CanvasActionManager {
     return -1;
   }
 
+  _getLink(graph, id) {
+    return graph?.links instanceof Map ? graph.links.get(id) : graph?.links?.[id];
+  }
+
+  _nodeIdentity(node) {
+    this._nodeIdentities ||= new WeakMap();
+    if (!this._nodeIdentities.has(node)) {
+      this._nodeIdentities.set(node, `${Date.now()}_${Math.random().toString(36).slice(2)}`);
+    }
+    return this._nodeIdentities.get(node);
+  }
+
   /**
    * Connect output port(s) from source node(s) to input port(s) of target node(s).
    * Supports single connection or batch connections list.
@@ -688,6 +700,7 @@ export class CanvasActionManager {
 
     const successful = [];
     const errors = [];
+    const changedInputs = new Set();
 
     for (const item of list) {
       const fromNodeId = item.from_node ?? item.fromNode;
@@ -724,11 +737,39 @@ export class CanvasActionManager {
 
       const inSlotObj = targetNode.inputs?.[inSlotIdx];
 
+      const inputKey = `${targetNode.id}:${inSlotIdx}`;
+      if (changedInputs.has(inputKey)) {
+        errors.push(`Input '${inSlotObj?.name}' on Node #${targetNode.id} already changed in this batch`);
+        continue;
+      }
+      const previousId = inSlotObj?.link;
+      const previousLink = previousId != null ? this._getLink(graph, previousId) : null;
+      if (previousId != null && !previousLink) {
+        errors.push(`Cannot safely replace unknown link #${previousId}`);
+        continue;
+      }
+      const oldSource = previousLink ? this.getNode(previousLink.origin_id) : null;
+      if (previousLink && !oldSource) {
+        errors.push(`Previous source Node #${previousLink.origin_id} is unavailable`);
+        continue;
+      }
+      // Re-applying an existing connection is a no-op; undo must leave it intact.
+      if (previousLink?.origin_id === sourceNode.id && previousLink.origin_slot === outSlotIdx) {
+        successful.push({ unchanged: true });
+        continue;
+      }
+      const previous = previousLink ? {
+        fromNodeId: previousLink.origin_id,
+        fromSlot: previousLink.origin_slot,
+        sourceIdentity: this._nodeIdentity(oldSource),
+      } : null;
+
       // Execute LiteGraph connection
       try {
+        graph.beforeChange?.();
         const connectRes = sourceNode.connect(outSlotIdx, targetNode, inSlotIdx);
         const linkId = targetNode.inputs?.[inSlotIdx]?.link;
-        if (connectRes === false && (linkId === null || linkId === undefined)) {
+        if (!connectRes || linkId == null || (typeof connectRes === "object" && connectRes.id !== linkId)) {
           errors.push(`LiteGraph rejected connection between Node #${sourceNode.id} [${outSlotObj?.name}] and Node #${targetNode.id} [${inSlotObj?.name}]`);
           continue;
         }
@@ -736,11 +777,16 @@ export class CanvasActionManager {
         console.error(`[ComfyMate] Error connecting Node #${sourceNode.id} to #${targetNode.id}:`, err);
         errors.push(`Failed to link Node #${sourceNode.id} to #${targetNode.id}: ${err.message}`);
         continue;
+      } finally {
+        graph.afterChange?.();
       }
 
       const linkId = targetNode.inputs?.[inSlotIdx]?.link;
       const record = {
-        linkId: linkId !== undefined ? linkId : null,
+        linkId,
+        previous,
+        sourceIdentity: this._nodeIdentity(sourceNode),
+        targetIdentity: this._nodeIdentity(targetNode),
         fromNodeId: sourceNode.id,
         fromNodeTitle: sourceNode.title || sourceNode.type,
         fromSlot: outSlotIdx,
@@ -752,6 +798,7 @@ export class CanvasActionManager {
       };
 
       successful.push(record);
+      changedInputs.add(inputKey);
 
       // Flash visual highlight on both nodes
       this.flashNode(targetNode);
@@ -780,57 +827,54 @@ export class CanvasActionManager {
    * Disconnect previously created node connections (Undo action).
    */
   disconnectNodes(linksList) {
-    if (!linksList) {
-      return { success: false, message: "No link info provided" };
-    }
-
-    const list = Array.isArray(linksList) ? linksList : [linksList];
+    if (!linksList) return { success: false, message: "No link info provided" };
     const graph = this.app?.graph;
-    let disconnectedCount = 0;
-
-    for (const record of list) {
-      const toNodeId = record.toNodeId ?? record.to_node;
-      const toSlot = record.toSlot ?? record.to_slot;
-      const linkId = record.linkId ?? record.link_id;
-
-      let disconnected = false;
-
-      // Method 1: Disconnect via targetNode.disconnectInput
-      if (toNodeId !== undefined && toSlot !== undefined) {
-        const targetNode = this.getNode(toNodeId);
-        if (targetNode && typeof targetNode.disconnectInput === "function") {
-          try {
-            targetNode.disconnectInput(toSlot);
-            disconnected = true;
-          } catch (e) {
-            console.warn(`[ComfyMate] Error disconnecting input on Node #${toNodeId}:`, e);
+    const list = Array.isArray(linksList) ? linksList : [linksList];
+    let count = 0;
+    const errors = [];
+    for (const record of [...list].reverse()) {
+      if (record.unchanged) { count++; continue; }
+      const target = this.getNode(record.toNodeId);
+      const source = this.getNode(record.fromNodeId);
+      const link = this._getLink(graph, record.linkId);
+      if (!target || !source || record.linkId == null
+        || target.inputs?.[record.toSlot]?.link !== record.linkId
+        || record.targetIdentity !== this._nodeIdentity(target)
+        || record.sourceIdentity !== this._nodeIdentity(source)
+        || !link || link.origin_id !== source.id || link.origin_slot !== record.fromSlot
+        || link.target_id !== target.id || link.target_slot !== record.toSlot) {
+        errors.push("Connection changed since this action; undo skipped");
+        continue;
+      }
+      const previous = record.previous;
+      const oldSource = previous ? this.getNode(previous.fromNodeId) : null;
+      if (previous && (!oldSource || previous.sourceIdentity !== this._nodeIdentity(oldSource))) {
+        errors.push("Previous source changed; undo skipped");
+        continue;
+      }
+      try {
+        graph.beforeChange?.();
+        if (typeof target.disconnectInput === "function") target.disconnectInput(record.toSlot);
+        else graph.removeLink(record.linkId);
+        if (target.inputs[record.toSlot].link != null) throw new Error("Failed to disconnect action link");
+        if (previous) {
+          const restored = oldSource.connect(previous.fromSlot, target, record.toSlot);
+          if (!restored || target.inputs[record.toSlot].link == null) {
+            // Keep the applied connection if the old source can no longer be restored.
+            const reapplied = source.connect(record.fromSlot, target, record.toSlot);
+            if (reapplied) record.linkId = target.inputs[record.toSlot].link;
+            throw new Error("Failed to restore previous connection");
           }
         }
-      }
-
-      // Method 2: Disconnect via graph.removeLink
-      if (!disconnected && linkId !== null && linkId !== undefined && graph && typeof graph.removeLink === "function") {
-        try {
-          graph.removeLink(linkId);
-          disconnected = true;
-        } catch (e) {
-          console.warn(`[ComfyMate] Error removing link #${linkId}:`, e);
-        }
-      }
-
-      if (disconnected) {
-        disconnectedCount++;
+        count++;
+      } catch (err) {
+        errors.push(err.message);
+      } finally {
+        graph?.afterChange?.();
       }
     }
-
-    if (disconnectedCount > 0 && graph && graph.setDirtyCanvas) {
-      graph.setDirtyCanvas(true, true);
-    }
-
-    return {
-      success: disconnectedCount > 0,
-      count: disconnectedCount,
-    };
+    if (count) graph?.setDirtyCanvas?.(true, true);
+    return { success: count > 0, count, errors };
   }
 
   /**

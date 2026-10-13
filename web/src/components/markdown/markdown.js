@@ -4,7 +4,7 @@
  * and code blocks with copy buttons.
  */
 function escapeHtml(str) {
-  if (!str) return "";
+  if (str === null || str === undefined) return "";
   return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -15,82 +15,61 @@ function escapeHtml(str) {
 
 export function renderMarkdown(text, tArg = (k) => k) {
   if (!text) return "";
-  const t = typeof tArg === "function" ? tArg : (k) => (tArg && tArg[k]) || k;
+  const translate = typeof tArg === "function" ? tArg : (k) => (tArg && tArg[k]) || k;
+  const t = (key) => escapeHtml(translate(key));
+  let blockPrefix = "\u0000CMBLOCK";
+  while (text.includes(blockPrefix)) blockPrefix += "X";
 
   // 1. Pre-process and extract code blocks (both complete and open/streaming)
   const codeBlocks = [];
   let processed = text.replace(/```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
     const idx = codeBlocks.length;
     codeBlocks.push({ lang: lang || "text", code });
-    return `\n__CM_CODE_BLOCK_${idx}__\n`;
+    return `\n${blockPrefix}${idx}\u0000\n`;
   });
 
   // Handle open/streaming code block at the end
   processed = processed.replace(/```([a-zA-Z0-9_+-]*)\n([\s\S]*)$/, (match, lang, code) => {
     const idx = codeBlocks.length;
     codeBlocks.push({ lang: lang || "text", code });
-    return `\n__CM_CODE_BLOCK_${idx}__\n`;
+    return `\n${blockPrefix}${idx}\u0000\n`;
   });
 
-  // Helper: parse inline markdown elements with protection for inline code
+  // Tokenize raw inline input before formatting. Generated HTML is never parsed again.
   function parseInline(str) {
     if (!str) return "";
-
-    // Extract inline code snippets first to protect them from bold/italic formatting
-    const inlineCodes = [];
-    let s = str.replace(/`([^`]+)`/g, (m, c) => {
-      const idx = inlineCodes.length;
-      inlineCodes.push(c);
-      return `__CM_INLINE_CODE_${idx}__`;
-    });
-
-    // Escape raw HTML entities
-    s = s
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-
-    // Markdown Links: [text](url) - sanitize URL protocols
-    s = s.replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/|#)[^\s)]+)\)/g, '<a class="cm-link" href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-
-    // Bold: **text** or __text__
+    const fragments = [];
+    let prefix = "\u0000CMINLINE";
+    while (str.includes(prefix)) prefix += "X";
+    const nodeTag = (nid, type = "") => {
+      const cleanType = type.replace(/^[📍📌🎯]\s*/u, "").trim();
+      const label = cleanType ? `Node #${nid} [${cleanType}]` : `Node #${nid}`;
+      return `<span class="cm-node-tag" data-node-id="${nid}" title="${t("locateNode")}">📍 ${escapeHtml(label)}</span>`;
+    };
+    let s = str.replace(/`([^`]+)`|\[([^\]]+)\]\(((?:https?:\/\/|\/|#)[^\s)]+)\)|(?:[📍📌🎯]\s*)?(?<![a-zA-Z0-9])Node #(\d+)(?:\s*\[([^\]]+)\])?/gu,
+      (match, code, label, url, nid, type) => {
+        let html;
+        if (code !== undefined) {
+          const node = code.replace(/^[📍📌🎯]\s*/u, "").trim()
+            .match(/^(?:Node\s*)?#(\d+)(?:\s*\[([^\]]+)\])?$/iu);
+          html = node ? nodeTag(node[1], node[2]) : `<code class="cm-inline-code">${escapeHtml(code)}</code>`;
+        } else if (url !== undefined) {
+          html = `<a class="cm-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${parseInline(label)}</a>`;
+        } else {
+          html = nodeTag(nid, type);
+        }
+        const idx = fragments.push(html) - 1;
+        return `${prefix}${idx}\u0000`;
+      });
+    s = escapeHtml(s);
     s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     s = s.replace(/(^|\W)__([^_]+)__(?=\W|$)/g, "$1<strong>$2</strong>");
-
-    // Italic: *text* or _text_
     s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
     s = s.replace(/(^|\s)_([^_]+)_(?=\s|$)/g, "$1<em>$2</em>");
-
-    // Strikethrough: ~~text~~
     s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");
-
-    // 1. Support plain text "Node #123 [Type]" or "Node #123"
-    // (Must run BEFORE restoring inline codes so it never matches inside already-generated tags)
-    s = s.replace(/(?:[📍📌🎯]\s*)?\bNode #(\d+)(?:\s*\[([^\]]+)\])?/gu, (match, nid, ntype) => {
-      const cleanType = ntype ? ntype.replace(/^[📍📌🎯]\s*/u, "").trim() : "";
-      const label = cleanType ? `Node #${nid} [${cleanType}]` : `Node #${nid}`;
-      return `<span class="cm-node-tag" data-node-id="${nid}" title="${t("locateNode") || "在画布中定位此节点"}">📍 ${label}</span>`;
+    fragments.forEach((fragment, idx) => {
+      s = s.replace(`${prefix}${idx}\u0000`, () => fragment);
     });
-
-    // 2. Restore inline code snippets safely
-    inlineCodes.forEach((c, idx) => {
-      const esc = c
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-
-      const cleanC = c.replace(/^[📍📌🎯]\s*/u, "").trim();
-      const nodeMatch = cleanC.match(/^(?:Node\s*)?#(\d+)(?:\s*\[([^\]]+)\])?$/iu);
-      if (nodeMatch) {
-        const nid = nodeMatch[1];
-        const ntype = nodeMatch[2] ? nodeMatch[2].trim() : "";
-        const label = ntype ? `Node #${nid} [${ntype}]` : `Node #${nid}`;
-        s = s.replace(`__CM_INLINE_CODE_${idx}__`, `<span class="cm-node-tag" data-node-id="${nid}" title="${t("locateNode") || "在画布中定位此节点"}">📍 ${label}</span>`);
-      } else {
-        s = s.replace(`__CM_INLINE_CODE_${idx}__`, `<code class="cm-inline-code">${esc}</code>`);
-      }
-    });
-
     return s;
   }
 
@@ -125,7 +104,7 @@ export function renderMarkdown(text, tArg = (k) => k) {
     const trimmed = line.trim();
 
     // Code block placeholder
-    if (trimmed.startsWith("__CM_CODE_BLOCK_") && trimmed.endsWith("__")) {
+    if (codeBlocks.some((_, idx) => trimmed === `${blockPrefix}${idx}\u0000`)) {
       closeAll();
       output.push(trimmed);
       continue;
@@ -282,7 +261,7 @@ export function renderMarkdown(text, tArg = (k) => k) {
                 </div>
               </div>
             `;
-            html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
+            html = html.replace(`${blockPrefix}${idx}\u0000`, () => cardHtml);
             return;
           }
         } else if (parsed && parsed.action === "recommend_nodes" && Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
@@ -325,7 +304,7 @@ export function renderMarkdown(text, tArg = (k) => k) {
               </div>
             </div>
           `;
-          html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
+          html = html.replace(`${blockPrefix}${idx}\u0000`, () => cardHtml);
           return;
         } else if (parsed && parsed.action === "connect_nodes") {
           const rawList = Array.isArray(parsed.connections) && parsed.connections.length > 0
@@ -390,7 +369,7 @@ export function renderMarkdown(text, tArg = (k) => k) {
                 </div>
               </div>
             `;
-            html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
+            html = html.replace(`${blockPrefix}${idx}\u0000`, () => cardHtml);
             return;
           }
         } else if (parsed && parsed.action === "auto_layout") {
@@ -419,7 +398,7 @@ export function renderMarkdown(text, tArg = (k) => k) {
               </div>
             </div>
           `;
-          html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
+          html = html.replace(`${blockPrefix}${idx}\u0000`, () => cardHtml);
           return;
         } else if (parsed && parsed.action === "queue_prompt") {
           const reasonEsc = parsed.reason ? escapeHtml(parsed.reason) : "";
@@ -457,7 +436,7 @@ export function renderMarkdown(text, tArg = (k) => k) {
               </div>
             </div>
           `;
-          html = html.replace(`__CM_CODE_BLOCK_${idx}__`, cardHtml);
+          html = html.replace(`${blockPrefix}${idx}\u0000`, () => cardHtml);
           return;
         }
       } catch (e) {
@@ -465,10 +444,7 @@ export function renderMarkdown(text, tArg = (k) => k) {
       }
     }
 
-    const escapedCode = item.code
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    const escapedCode = escapeHtml(item.code);
     const blockHtml = `
       <div class="cm-code-wrapper">
         <div class="cm-code-header">
@@ -478,7 +454,7 @@ export function renderMarkdown(text, tArg = (k) => k) {
         <pre><code class="language-${item.lang}">${escapedCode}</code></pre>
       </div>
     `;
-    html = html.replace(`__CM_CODE_BLOCK_${idx}__`, blockHtml);
+    html = html.replace(`${blockPrefix}${idx}\u0000`, () => blockHtml);
   });
 
   return html;
